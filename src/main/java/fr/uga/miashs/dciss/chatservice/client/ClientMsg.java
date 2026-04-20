@@ -82,12 +82,14 @@ public class ClientMsg {
 		if (l != null)
 			mListeners.add(l);
 	}
+
 	protected void notifyMessageListeners(Packet p) {
 		mListeners.forEach(x -> x.messageReceived(p));
 	}
-	
+
 	/**
-	 * Register a ConnectionListener to the client. It will be notified if the connection  start or ends.
+	 * Register a ConnectionListener to the client. It will be notified if the
+	 * connection start or ends.
 	 * 
 	 * @param l
 	 */
@@ -95,10 +97,10 @@ public class ClientMsg {
 		if (l != null)
 			cListeners.add(l);
 	}
+
 	protected void notifyConnectionListeners(boolean active) {
 		cListeners.forEach(x -> x.connectionEvent(active));
 	}
-
 
 	public int getIdentifier() {
 		return identifier;
@@ -150,7 +152,7 @@ public class ClientMsg {
 			// error, connection closed
 			closeSession();
 		}
-		
+
 	}
 
 	/**
@@ -185,13 +187,20 @@ public class ClientMsg {
 	}
 
 	public static void main(String[] args) throws UnknownHostException, IOException, InterruptedException {
-		ClientMsg c = new ClientMsg("localhost", 1666);
+		// ClientMsg c = new ClientMsg("localhost", 1666);
+
+		// MISE EN PLACE D'UN SERVEUR POUR TESTER LE CLIENT
+		String host = args.length > 0 ? args[0] : "localhost";
+		ClientMsg c = new ClientMsg(host, 1666);
 
 		// add a dummy listener that print the content of message as a string
 		c.addMessageListener(p -> System.out.println(p.srcId + " says to " + p.destId + ": " + new String(p.data)));
-		
+
 		// add a connection listener that exit application when connection closed
-		c.addConnectionListener(active ->  {if (!active) System.exit(0);});
+		c.addConnectionListener(active -> {
+			if (!active)
+				System.exit(0);
+		});
 
 		c.startSession();
 		System.out.println("Vous êtes : " + c.getIdentifier());
@@ -216,8 +225,6 @@ public class ClientMsg {
 			c.sendPacket(0, bos.toByteArray());
 
 		}
-		
-		
 
 		Scanner sc = new Scanner(System.in);
 		String lu = null;

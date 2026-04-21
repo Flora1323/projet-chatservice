@@ -14,6 +14,8 @@ package fr.uga.miashs.dciss.chatservice.client;
 import java.io.*;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -249,7 +251,49 @@ public class ClientMsg {
 		ClientMsg c = new ClientMsg("localhost", 1666);
 
 		// add a dummy listener that print the content of message as a string
-		c.addMessageListener(p -> System.out.println(p.srcId + " says to " + p.destId + ": " + new String(p.data)));
+		c.addMessageListener(p -> {
+			// 如果 srcId == 0 -> 这是服务器发来的通知(Actions serveur -> client)
+			if (p.srcId == 0 && p.data != null && p.data.length >= 1) {
+				ByteBuffer buf = ByteBuffer.wrap(p.data);
+				byte type = buf.get();
+				switch (type) {
+					case NOTIF_GROUP_CREATED: {
+						int gid = buf.getInt();
+						System.out.println("✓ Groupe " + gid + " créé avec succès");
+						break;
+					}
+					case NOTIF_MEMBER_ADDED: {
+						int gid = buf.getInt();
+						int uid = buf.getInt();
+						System.out.println("✓ User " + uid + " ajouté au groupe " + gid);
+						break;
+					}
+					case NOTIF_MEMBER_REMOVED: {
+						int gid = buf.getInt();
+						int uid = buf.getInt();
+						System.out.println("✓ User " + uid + " retiré du groupe " + gid);
+						break;
+					}
+					case NOTIF_GROUP_DELETED: {
+						int gid = buf.getInt();
+						System.out.println("✓ Groupe " + gid + " supprimé");
+						break;
+					}
+					case NOTIF_ERROR: {
+						int len = buf.getInt();
+						byte[] msg = new byte[len];
+						buf.get(msg);
+						System.out.println("✗ ERREUR: " + new String(msg, StandardCharsets.UTF_8));
+						break;
+					}
+					default:
+						System.out.println("Notification inconnue: type=" + type);
+				}
+			} else {
+				// Message normal (privé ou groupe)
+				System.out.println(p.srcId + " says to " + p.destId + ": " + new String(p.data));
+			}
+		});
 
 		// add a connection listener that exit application when connection closed
 		c.addConnectionListener(active -> {
@@ -296,13 +340,24 @@ public class ClientMsg {
 					 String cmd = parts[0];
 					 switch(cmd) {
 						case "/new": {
-							// /new 2,3,5
-							String [] ids = parts[1].split(",");//按逗号分割
+							// Syntaxe: /new 2,3,4  (liste des membres séparée par virgules,
+							// sans id de groupe : le serveur attribue automatiquement un id négatif)
+							if (parts.length < 2) {
+								System.out.println("Usage: /new <id1,id2,...>   ex: /new 2,3,4");
+								break;
+							}
+							// On concatène parts[1..] au cas où l'utilisateur ait mis des espaces
+							StringBuilder sb = new StringBuilder();
+							for (int i = 1; i < parts.length; i++) {
+								if (i > 1) sb.append(",");
+								sb.append(parts[i]);
+							}
+							String [] ids = sb.toString().split(",");
 							int[] members = new int [ids.length];
 							for(int i = 0; i<ids.length;i++) 
 								members [i] = Integer.parseInt(ids[i].trim());
 							c.requestCreateGroup(members);
-							System.out.println("Demande: créer groupe avec " + parts[1] + " envoyée");
+							System.out.println("Demande: créer groupe avec membres " + sb + " envoyée");
 							break;
 						}
 
@@ -353,6 +408,7 @@ public class ClientMsg {
 						default : 
 							System.out.println ("Commande inconnue");
 					 } 
+					 Thread.sleep(500); 
 					} else {
 						//envoie de messages directs à un autre utilisateurs
 						int dest = Integer.parseInt(ligne);

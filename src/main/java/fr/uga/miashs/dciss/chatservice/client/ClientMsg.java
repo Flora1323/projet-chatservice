@@ -200,8 +200,10 @@ public class ClientMsg {
 
 	public static void main(String[] args) throws UnknownHostException, IOException, InterruptedException {
 		
-		LocalHistoryManager db = new LocalHistoryManager();
-		db.connect();
+		//(c'est inutile mtn c'était pour tester)
+		//LocalHistoryManager db = new LocalHistoryManager();
+		//db.connect();
+		
 		// ClientMsg c = new ClientMsg("localhost", 1666);
 
 		// MISE EN PLACE D'UN SERVEUR POUR TESTER LE CLIENT
@@ -209,6 +211,9 @@ public class ClientMsg {
 		int id = args.length > 1 ? Integer.parseInt(args[1]) : 0; // 0 = nouvel utilisateur
 
 		ClientMsg c = new ClientMsg(id, host,1666);
+		
+		//on allume la bdd
+		c.history.connect();
 
 		// add a dummy listener that print the content of message as a string
 		c.addMessageListener(p -> System.out.println(p.srcId + " says to " + p.destId + ": " + new String(p.data)));
@@ -243,18 +248,35 @@ public class ClientMsg {
 
 		}
 
+		
 		Scanner sc = new Scanner(System.in);
-		String lu = null;
+		String lu = ""; //null à => vide
 		while (!"\\quit".equals(lu)) {
 			try {
-				System.out.println("A qui voulez vous écrire ? ");
+				System.out.println("A qui voulez vous écrire ? (ou /history) ");
+				
+				//on lit l'entrée de l'utilisateur
+				String saisie = sc.nextLine();
+				if ("/history".equals(saisie)) {
+					c.history.afficherHistorique();
+					continue;
+				}
+				if ("\\quit".equals(saisie)) {
+					lu = "\\quit"; //pour sortir de la boucle proprement
+					continue;
+				}
+				
 				int dest = Integer.parseInt(sc.nextLine());
 
 				System.out.println("Votre message ? ");
 				lu = sc.nextLine();
-				c.sendPacket(dest, lu.getBytes());
+				
+				if (!"\\quit".equals(lu)) { // pour éviter d'envoyer un message de quit
+					c.sendPacket(dest, lu.getBytes());
+				}
 			} catch (InputMismatchException | NumberFormatException e) {
-				System.out.println("Mauvais format");
+				//message d'erreur améliorée
+				System.out.println("Mauvais format. Entrez un ID ou /history ou \\quit");
 			}
 
 		}

@@ -28,5 +28,12 @@ public class LocalHistoryManager {
         
         // doit être modifié par du SQL INSERT INTO messages (from_id, to_id, text) VALUES (?, ?, ?)
     }
+    
+    //méthode temporaire pour simuler l'affichage de l'historique des messages depuis la base de données
+    public void afficherHistorique() {
+        System.out.println("========== HISTORIQUE DES MESSAGES ==========");
+        System.out.println("[DB-DEBUG] Ici, la BDD affichera les vrais messages plus tard.");
+        System.out.println("=============================================");
+    }
 }
 

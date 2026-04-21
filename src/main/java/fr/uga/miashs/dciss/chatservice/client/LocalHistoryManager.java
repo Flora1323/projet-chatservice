@@ -21,5 +21,12 @@ public class LocalHistoryManager {
             System.out.println("ERROR connecting to database: " + e.getMessage());
         }
     }
+    //méthode temporaire pour simuler la sauvegarde d'un message dans la base de données
+    public void saveMessage(int fromId, int toId, String text) {
+        //juste un sop pour montrer que ça marche
+        System.out.println("[DB-DEBUG] Saving to file: From " + fromId + " says: " + text);
+        
+        // doit être modifié par du SQL INSERT INTO messages (from_id, to_id, text) VALUES (?, ?, ?)
+    }
 }
 

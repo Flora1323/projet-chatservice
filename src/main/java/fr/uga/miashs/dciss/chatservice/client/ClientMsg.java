@@ -14,6 +14,7 @@ package fr.uga.miashs.dciss.chatservice.client;
 import java.io.*;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -40,6 +41,7 @@ public class ClientMsg {
 
 	private List<MessageListener> mListeners;
 	private List<ConnectionListener> cListeners;
+	private LocalHistoryManager history = new LocalHistoryManager();
 
 	/**
 	 * Create a client with an existing id, that will connect to the server at the
@@ -167,6 +169,16 @@ public class ClientMsg {
 				int length = dis.readInt();
 				byte[] data = new byte[length];
 				dis.readFully(data);
+				
+				// interception pour la BDD
+				// pour transformer les octets en string
+				String texteRecu = new String(data, StandardCharsets.UTF_8);
+				
+				//on envoie le message dans la classe sauvegarde (de LocalHistoryManager) 
+				if (history != null) {
+					history.saveMessage(sender, dest, texteRecu);
+				}
+				
 				notifyMessageListeners(new Packet(sender, dest, data));
 
 			}

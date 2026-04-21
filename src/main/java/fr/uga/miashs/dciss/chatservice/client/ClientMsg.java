@@ -191,7 +191,9 @@ public class ClientMsg {
 
 		// MISE EN PLACE D'UN SERVEUR POUR TESTER LE CLIENT
 		String host = args.length > 0 ? args[0] : "localhost";
-		ClientMsg c = new ClientMsg(host, 1666);
+		int id = args.length > 1 ? Integer.parseInt(args[1]) : 0; // 0 = nouvel utilisateur
+
+		ClientMsg c = new ClientMsg(id, host,1666);
 
 		// add a dummy listener that print the content of message as a string
 		c.addMessageListener(p -> System.out.println(p.srcId + " says to " + p.destId + ": " + new String(p.data)));

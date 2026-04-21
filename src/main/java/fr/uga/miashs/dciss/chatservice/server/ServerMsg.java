@@ -21,7 +21,8 @@ import fr.uga.miashs.dciss.chatservice.common.Packet;
 
 import java.util.*;
 
-public class ServerMsg {
+public class ServerMsg implements Serializable {
+	private static final long serialVersionUID = 1L; // implementation de Serializable pour permettre la sérialisation de l'état du serveur
 	
 	private final static Logger LOG = Logger.getLogger(ServerMsg.class.getName());
 	public final static int SERVER_CLIENTID = 0;

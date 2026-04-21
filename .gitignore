@@ -1,0 +1,26 @@
+# Build output
+target/
+*.class
+*.jar
+*.war
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+
+# Derby database files generated at runtime
+derby.log
+sample/
+server-state.ser
+client-*.db/

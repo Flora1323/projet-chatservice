@@ -16,9 +16,9 @@ package fr.uga.miashs.dciss.chatservice.common;
  */
 public class Packet {
 
-	public final int srcId;
-	public final int destId;
-	public final byte[] data;
+	public final int srcId;//发送者 id
+	public final int destId;//接收者 id
+	public final byte[] data;//真正的消息
 	
 	public Packet(int srcId, int destId, byte[] data) {
 		super();

@@ -21,16 +21,17 @@ import fr.uga.miashs.dciss.chatservice.common.Packet;
 import java.util.*;
 
 public class UserMsg implements PacketProcessor{
+	//implements PacketProcessor UserMsg 可以“处理一个 Packet
 	private final static Logger LOG = Logger.getLogger(UserMsg.class.getName());
 	
-	private int userId;
-	private Set<GroupMsg> groups;
+	private int userId;//这个用户是谁
+	private Set<GroupMsg> groups;//属于哪个群
 	
-	private ServerMsg server;
-	private transient Socket s;
-	private transient boolean active;
+	private ServerMsg server;//连接到哪个服务器
+	private transient Socket s;//当前的 socket 连接
+	private transient boolean active;//是否在线
 	
-	private BlockingQueue<Packet> sendQueue;
+	private BlockingQueue<Packet> sendQueue;//发给这个用户、但还没真正写到 socket 的消息队列
 	
 	public UserMsg(int clientId, ServerMsg server) {
 		if (clientId<1) throw new IllegalArgumentException("id must not be less than 0");
@@ -52,6 +53,8 @@ public class UserMsg implements PacketProcessor{
 		}
 		return false;
 	}
+
+
 	
 	// to be used carrefully, do not add groups directly
 	protected Set<GroupMsg> getGroups() {
@@ -151,5 +154,6 @@ public class UserMsg implements PacketProcessor{
 	public void process(Packet p) {
 		sendQueue.offer(p);
 	}
+
 	
 }

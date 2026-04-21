@@ -14,6 +14,7 @@ package fr.uga.miashs.dciss.chatservice.client;
 import java.io.*;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -185,15 +186,76 @@ public class ClientMsg {
 		s = null;
 		notifyConnectionListeners(false);
 	}
+	
+	
+	public void envoyerFichier(int destId, File file) {
+		try {
+			   //Lire le fichier en bytes
+			    byte[] fileBytes = Files.readAllBytes(file.toPath());
+		        byte[] nameBytes = file.getName().getBytes();
+
+		        
+		        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+		        DataOutputStream dos = new DataOutputStream(bos);
+		        
+		        //ecrire selon le protocole : type + taille nom + nom + taille fichier + contenu
+		        dos.writeByte(2);       // type = ?
+		        dos.writeInt(nameBytes.length);        // taille du nom
+		        dos.write(nameBytes);           // le nom
+		        dos.writeInt(fileBytes.length);        // taille du fichier
+		        dos.write(fileBytes);           // le contenu
+		        dos.flush( );
+		        
+		        //Envoyer via sendPacket
+		        sendPacket(destId, bos.toByteArray());
+		        
+		    } catch (IOException e) {
+		        e.printStackTrace();
+		    }
+		}
+	
+      
+	public void recevoirFichier(Packet p) {
+	    try {
+	        //réparper les outils pour LIRE les bytes du paquet
+	        ByteArrayInputStream bis = new ByteArrayInputStream(p.data);
+	        DataInputStream dis = new DataInputStream(bis);
+	        
+	        // Lire dans le même ordre qu'à l'envoi
+	        byte type = dis.readByte() ;              // lis le type
+	        int tailleNom = dis.readInt();          // lis la taille du nom
+	        
+	        // creer un tableau vide de la bonne taille, puis le remplir
+	        byte[] nameBytes = new byte[tailleNom];
+	        dis.readFully(nameBytes);
+	        String nomFichier = new String(nameBytes);
+	        
+	        int tailleFichier = dis.readInt();      // lis la taille du fichier
+	        byte[] fileBytes = new byte[tailleFichier];
+	        dis.readFully(fileBytes);
+	        
+	        // sauvegarder le fichier sur le disque
+	        File dossier = new File("fichiers_recus");
+	        if (!dossier.exists()) dossier.mkdirs();
+	        
+	        File fichierRecu = new File(dossier, nomFichier);
+	        Files.write(fichierRecu.toPath(), fileBytes);
+	        
+	        System.out.println("Fichier reçu : " + nomFichier + " de la part de " + p.srcId);
+	        
+	    } catch (IOException e) {
+	        e.printStackTrace();
+	    }
+	}
+	
+	
 
 	public static void main(String[] args) throws UnknownHostException, IOException, InterruptedException {
 		// ClientMsg c = new ClientMsg("localhost", 1666);
 
 		// MISE EN PLACE D'UN SERVEUR POUR TESTER LE CLIENT
 		String host = args.length > 0 ? args[0] : "localhost";
-		int id = args.length > 1 ? Integer.parseInt(args[1]) : 0; // 0 = nouvel utilisateur
-
-		ClientMsg c = new ClientMsg(id, host,1666);
+		ClientMsg c = new ClientMsg(host, 1666);
 
 		// add a dummy listener that print the content of message as a string
 		c.addMessageListener(p -> System.out.println(p.srcId + " says to " + p.destId + ": " + new String(p.data)));
@@ -202,6 +264,13 @@ public class ClientMsg {
 		c.addConnectionListener(active -> {
 			if (!active)
 				System.exit(0);
+		});
+		
+		// listener qui détecte et sauvegarde les fichiers reçus
+		c.addMessageListener(p -> {
+		    if (p.data[0] == 2) {
+		        c.recevoirFichier(p);
+		    }
 		});
 
 		c.startSession();
@@ -231,17 +300,35 @@ public class ClientMsg {
 		Scanner sc = new Scanner(System.in);
 		String lu = null;
 		while (!"\\quit".equals(lu)) {
-			try {
-				System.out.println("A qui voulez vous écrire ? ");
-				int dest = Integer.parseInt(sc.nextLine());
-
-				System.out.println("Votre message ? ");
-				lu = sc.nextLine();
-				c.sendPacket(dest, lu.getBytes());
-			} catch (InputMismatchException | NumberFormatException e) {
-				System.out.println("Mauvais format");
-			}
-
+		    try {
+		        System.out.println("Tapez 'message' pour envoyer un texte, 'fichier' pour un fichier, ou '\\quit' pour quitter :");
+		        lu = sc.nextLine();
+		        
+		        if (lu.equals("message")) {
+		            System.out.println("A qui voulez vous écrire ? ");
+		            int dest = Integer.parseInt(sc.nextLine());
+		            
+		            System.out.println("Votre message ? ");
+		            lu = sc.nextLine();
+		            c.sendPacket(dest, lu.getBytes());
+		            
+		        } else if (lu.equals("fichier")) {
+		            System.out.println("A qui voulez vous écrire ? ");
+		            int dest = Integer.parseInt(sc.nextLine());
+		            
+		            System.out.println("Chemin du fichier ? ");
+		            String chemin = sc.nextLine();
+		            File fichier = new File(chemin);
+		            if (fichier.exists()) {
+		                c.envoyerFichier(dest, fichier);
+		            } else {
+		                System.out.println("Fichier introuvable !");
+		            }
+		        }
+		        
+		    } catch (InputMismatchException | NumberFormatException e) {
+		        System.out.println("Mauvais format");
+		    }
 		}
 
 		/*

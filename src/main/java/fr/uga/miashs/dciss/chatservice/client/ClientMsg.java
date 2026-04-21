@@ -187,6 +187,9 @@ public class ClientMsg {
 	}
 
 	public static void main(String[] args) throws UnknownHostException, IOException, InterruptedException {
+		
+		LocalHistoryManager db = new LocalHistoryManager();
+		db.connect();
 		// ClientMsg c = new ClientMsg("localhost", 1666);
 
 		// MISE EN PLACE D'UN SERVEUR POUR TESTER LE CLIENT

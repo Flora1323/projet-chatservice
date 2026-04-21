@@ -266,7 +266,7 @@ public class ClientMsg {
 					continue;
 				}
 				
-				int dest = Integer.parseInt(sc.nextLine());
+				int dest = Integer.parseInt(saisie);
 
 				System.out.println("Votre message ? ");
 				lu = sc.nextLine();

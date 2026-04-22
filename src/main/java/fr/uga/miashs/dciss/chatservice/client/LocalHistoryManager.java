@@ -23,17 +23,26 @@ public class LocalHistoryManager {
     }
     //méthode temporaire pour simuler la sauvegarde d'un message dans la base de données
     public void saveMessage(int fromId, int toId, String text) {
-        //juste un sop pour montrer que ça marche
-        System.out.println("[DB-DEBUG] Saving to file: From " + fromId + " says: " + text);
+    	// On enregistre le message "en vrai" dans le fichier .db
+    	try {
+    	    Message.insertMessage(senderId, receiverId, content);
+    	} catch (Exception e) {
+    	    System.err.println("Erreur lors de l'enregistrement en BDD");
+    	}
         
         // doit être modifié par du SQL INSERT INTO messages (from_id, to_id, text) VALUES (?, ?, ?)
     }
     
     //méthode temporaire pour simuler l'affichage de l'historique des messages depuis la base de données
     public void afficherHistorique() {
-        System.out.println("========== HISTORIQUE DES MESSAGES ==========");
-        System.out.println("[DB-DEBUG] Ici, la BDD affichera les vrais messages plus tard.");
-        System.out.println("=============================================");
-    }
+    	if (input.startsWith("/history")) {
+    	    System.out.println("--- Historique des messages ---");
+    	    try {
+    	        // On va chercher les messages dans la BDD pour cet utilisateur
+    	        Message.getMessages(monIdUtilisateur); 
+    	    } catch (Exception e) {
+    	        System.out.println("Impossible de charger l'historique.");
+    	    }
+    	}
 }
 

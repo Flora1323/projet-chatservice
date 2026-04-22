@@ -56,6 +56,8 @@ public class UserMsg implements PacketProcessor, Serializable {
 		return false;
 	}
 
+
+	
 	// to be used carrefully, do not add groups directly
 	protected Set<GroupMsg> getGroups() {
 		return groups;
@@ -161,4 +163,5 @@ public class UserMsg implements PacketProcessor, Serializable {
 		sendQueue.offer(p);
 	}
 
+	
 }

@@ -248,7 +248,13 @@ public class ClientMsg {
 
 
 	public static void main(String[] args) throws UnknownHostException, IOException, InterruptedException {
-		ClientMsg c = new ClientMsg("localhost", 1666);
+		// ClientMsg c = new ClientMsg("localhost", 1666);
+
+		// MISE EN PLACE D'UN SERVEUR POUR TESTER LE CLIENT
+		String host = args.length > 0 ? args[0] : "localhost";
+		int id = args.length > 1 ? Integer.parseInt(args[1]) : 0; // 0 = nouvel utilisateur
+
+		ClientMsg c = new ClientMsg(id, host,1666);
 
 		// add a dummy listener that print the content of message as a string
 		c.addMessageListener(p -> {

@@ -21,8 +21,10 @@ import fr.uga.miashs.dciss.chatservice.common.Packet;
 
 import java.util.*;
 
-public class ServerMsg {
-	
+public class ServerMsg implements Serializable {
+	private static final long serialVersionUID = 1L; // implementation de Serializable pour permettre la sérialisation
+														// de l'état du serveur
+
 	private final static Logger LOG = Logger.getLogger(ServerMsg.class.getName());
 	/* LOG.info("Server started");
 	LOG.warning("Unknown client id");
@@ -38,9 +40,7 @@ public class ServerMsg {
 	// maps pour associer les id aux users et groupes
 	private Map<Integer, UserMsg> users;
 	private Map<Integer, GroupMsg> groups;
-	
-	
-	
+
 	// séquences pour générer les identifiant d'utilisateurs et de groupe
 	private AtomicInteger nextUserId;
 	/*那第一个新用户连接时，服务器分配：userId = 1 
@@ -53,59 +53,60 @@ public class ServerMsg {
 		serverSock = new ServerSocket(port);
 		started = false;
 		users = new ConcurrentHashMap<>();
-		groups = new ConcurrentHashMap<>(); 
+		groups = new ConcurrentHashMap<>();
 		nextUserId = new AtomicInteger(1);
 		nextGroupId = new AtomicInteger(-1);
 		sp = new ServerPacketProcessor(this);
 		executor = Executors.newCachedThreadPool();
 	}
-	
+
 	public GroupMsg createGroup(int ownerId) {
 		UserMsg owner = users.get(ownerId);
-		if (owner==null) throw new ServerException("User with id="+ownerId+" unknown. Group creation failed.");
+		if (owner == null)
+			throw new ServerException("User with id=" + ownerId + " unknown. Group creation failed.");
 		int id = nextGroupId.getAndDecrement();
-		GroupMsg res = new GroupMsg(id,owner);
+		GroupMsg res = new GroupMsg(id, owner);
 		groups.put(id, res);
-		LOG.info("Group "+res.getId()+" created");
+		LOG.info("Group " + res.getId() + " created");
 		return res;
 	}
-	
+
 	public boolean removeGroup(int groupId) {
-		GroupMsg g =groups.remove(groupId);
-		if (g==null) return false;
+		GroupMsg g = groups.remove(groupId);
+		if (g == null)
+			return false;
 		g.beforeDelete();
 		return true;
 	}
-	
+
 	public boolean removeUser(int userId) {
-		UserMsg u =users.remove(userId);
-		if (u==null) return false;
+		UserMsg u = users.remove(userId);
+		if (u == null)
+			return false;
 		u.beforeDelete();
 		return true;
 	}
-	
+
 	public UserMsg getUser(int userId) {
 		return users.get(userId);
 	}
-	
+
 	// Methode utilisée pour savoir quoi faire d'un paquet
 	// reçu par le serveur
 	public void processPacket(Packet p) {
 		PacketProcessor pp = null;
-		if (p.destId < 0) { //message de groupe
+		if (p.destId < 0) { // message de groupe
 			// can be send only if sender is member
 			UserMsg sender = users.get(p.srcId);
 			GroupMsg g = groups.get(p.destId);
-			if (g != null && sender != null && g.getMembers().contains(sender) )
-			    pp=g;
+			if (g.getMembers().contains(sender))
+				pp = g;
+		} else if (p.destId > 0) { // message entre utilisateurs
+			pp = users.get(p.destId);
+		} else { // message de gestion pour le serveur
+			pp = sp;
 		}
-		else if (p.destId > 0) { // message entre utilisateurs
-			 pp = users.get(p.destId);
-		}
-		else { // message de gestion pour le serveur
-			pp=sp;
-		}
-		
+
 		if (pp != null) {
 			pp.process(p);
 		}
@@ -123,7 +124,7 @@ public class ServerMsg {
 
 				// lit l'identifiant du client
 				int userId = dis.readInt();
-				//si 0 alors il faut créer un nouvel utilisateur et
+				// si 0 alors il faut créer un nouvel utilisateur et
 				// envoyer l'identifiant au client
 				if (userId == 0) {
 					userId = nextUserId.getAndIncrement();
@@ -131,9 +132,9 @@ public class ServerMsg {
 					dos.flush();
 					users.put(userId, new UserMsg(userId, this));
 				}
-				// si l'identifiant existe ou est nouveau alors 
-				// deux "taches"/boucles  sont lancées en parralèle
-				// une pour recevoir les messages du client, 
+				// si l'identifiant existe ou est nouveau alors
+				// deux "taches"/boucles sont lancées en parralèle
+				// une pour recevoir les messages du client,
 				// une pour envoyer des messages au client
 				// les deux boucles sont gérées au niveau de la classe UserMsg
 				UserMsg x = users.get(userId);
@@ -168,9 +169,57 @@ public class ServerMsg {
 	public GroupMsg getGroup(int id) {
 		return groups.get(id);
 	}
+	
+	public void save(String filePath) {
+		try (ObjectOutputStream oos = new ObjectOutputStream(
+				new FileOutputStream(filePath))) {
+			// On écrit les users dans le fichier
+			oos.writeObject(users);
+			// On écrit les groupes dans le fichier
+			oos.writeObject(groups);
+			// On sauvegarde les compteurs d'ID
+			// pour ne pas réattribuer un ID déjà utilisé
+			oos.writeInt(nextUserId.get());
+			oos.writeInt(nextGroupId.get());
+		} catch (IOException e) {
+			LOG.warning("Erreur sauvegarde : " + e.getMessage());
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	public void load(String filePath) {
+		try (ObjectInputStream ois = new ObjectInputStream(
+				new FileInputStream(filePath))) {
+			// On relit les users depuis le fichier
+			// dans le même ordre que la sauvegarde !
+			users = (Map<Integer, UserMsg>) ois.readObject();
+			// On relit les groupes
+			groups = (Map<Integer, GroupMsg>) ois.readObject();
+			// On restaure les compteurs d'ID
+			nextUserId.set(ois.readInt());
+			nextGroupId.set(ois.readInt());
+		} catch (IOException | ClassNotFoundException e) {
+			LOG.warning("Erreur chargement : " + e.getMessage());
+		}
+	}
 
 	public static void main(String[] args) throws IOException {
 		ServerMsg s = new ServerMsg(1666);
+
+		// On vérifie si un fichier de sauvegarde existe
+		// Si oui, on recharge l'état précédent du serveur
+		File f = new File("server_state.ser");
+		if (f.exists()) {
+			s.load("server_state.ser");
+		}
+
+		// addShutdownHook = code exécuté automatiquement
+		// quand le serveur est arrêté (Ctrl+C par exemple)
+		// Ça permet de sauvegarder juste avant de s'éteindre
+		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+			s.save("server_state.ser");
+		}));
+
 		s.start();
 	}
 

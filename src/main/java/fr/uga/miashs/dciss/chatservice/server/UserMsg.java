@@ -10,42 +10,44 @@
  */
 
 package fr.uga.miashs.dciss.chatservice.server;
+
 import java.io.*;
 import java.net.Socket;
 import java.util.concurrent.*;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Logger;
 
 import fr.uga.miashs.dciss.chatservice.common.Packet;
 
 import java.util.*;
 
-public class UserMsg implements PacketProcessor{
-	//implements PacketProcessor UserMsg 可以“处理一个 Packet
+public class UserMsg implements PacketProcessor, Serializable {
 	private final static Logger LOG = Logger.getLogger(UserMsg.class.getName());
-	
-	private int userId;//这个用户是谁
-	private Set<GroupMsg> groups;//属于哪个群
-	
-	private ServerMsg server;//连接到哪个服务器
-	private transient Socket s;//当前的 socket 连接
-	private transient boolean active;//是否在线
-	
-	private BlockingQueue<Packet> sendQueue;//发给这个用户、但还没真正写到 socket 的消息队列
-	
+	private static final long serialVersionUID = 1L; // implementation de Serializable pour permettre la sérialisation
+														// de l'état du serveur
+
+	private int userId;
+	private Set<GroupMsg> groups;
+
+	private ServerMsg server;
+	private transient Socket s;
+	private transient boolean active;
+
+	private BlockingQueue<Packet> sendQueue; // les messages sont sauvegardés
+
 	public UserMsg(int clientId, ServerMsg server) {
-		if (clientId<1) throw new IllegalArgumentException("id must not be less than 0");
-		this.server=server;
-		this.userId=clientId;
-		active=false;
+		if (clientId < 1)
+			throw new IllegalArgumentException("id must not be less than 0");
+		this.server = server;
+		this.userId = clientId;
+		active = false;
 		sendQueue = new LinkedBlockingQueue<>();
 		groups = Collections.synchronizedSet(new HashSet<>());
 	}
-	
+
 	public int getId() {
 		return userId;
 	}
-	
+
 	public boolean removeGroup(GroupMsg g) {
 		if (groups.remove(g)) {
 			g.removeMember(this);
@@ -60,64 +62,68 @@ public class UserMsg implements PacketProcessor{
 	protected Set<GroupMsg> getGroups() {
 		return groups;
 	}
-	
+
 	/*
-	 * This method has to be called before removing a group in order to clean membership.
+	 * This method has to be called before removing a group in order to clean
+	 * membership.
 	 */
 	public void beforeDelete() {
-		groups.forEach(g->g.getMembers().remove(this));
-		
+		groups.forEach(g -> g.getMembers().remove(this));
+
 	}
-	
-	
+
 	/*
 	 * METHODS FOR MANAING THE CONNECTION
 	 */
 	public boolean open(Socket s) {
-		if (active) return false;
-		this.s=s;
-		active=true;
+		if (active)
+			return false;
+		this.s = s;
+		active = true;
+		// Les messages en attente dans sendQueue seront automatiquement envoyés par sendLoop()
+		// car elle repart dès que open() est appelé !
 		return true;
 	}
-	
+
 	public void close() {
-		active=false;
+		active = false;
 		try {
-			if (s!=null) s.close();
+			if (s != null)
+				s.close();
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		s=null;
+		s = null;
 		LOG.info(userId + " deconnected");
 	}
-	
+
 	public boolean isConnected() {
-		return s!=null;
+		return s != null;
 	}
-	
+
 	// boucle d'envoie
 	public void receiveLoop() {
 		try {
 			DataInputStream dis = new DataInputStream(s.getInputStream());
 			// tant que la connexion n'est pas terminée
-			while (active && ! s.isInputShutdown()) {
+			while (active && !s.isInputShutdown()) {
 				// on lit les paquets envoyé par le client
 				int destId = dis.readInt();
 				int length = dis.readInt();
 				byte[] content = new byte[length];
 				dis.readFully(content);
 				// on envoie le paquet à ServerMsg pour qu'il le gère
-				server.processPacket(new Packet(userId,destId,content));
+				server.processPacket(new Packet(userId, destId, content));
 			}
-			
+
 		} catch (IOException e) {
 			// problem in reading, probably end connection
-			LOG.warning("Connection with client "+userId+" is broken...close it.");
+			LOG.warning("Connection with client " + userId + " is broken...close it.");
 		}
 		close();
 	}
-	
+
 	// boucle d'envoi
 	public void sendLoop() {
 		Packet p = null;
@@ -126,7 +132,8 @@ public class UserMsg implements PacketProcessor{
 			// tant que la connexion n'est pas terminée
 			while (active && s.isConnected()) {
 				// on récupère un message à envoyer dans la file
-				// sinon on attend, car la méthode take est "bloquante" tant que la file est vide
+				// sinon on attend, car la méthode take est "bloquante" tant que la file est
+				// vide
 				p = sendQueue.take();
 				// on envoie le paquet au client
 				dos.writeInt(p.srcId);
@@ -134,19 +141,20 @@ public class UserMsg implements PacketProcessor{
 				dos.writeInt(p.data.length);
 				dos.write(p.data);
 				dos.flush();
-				
+
 			}
 		} catch (IOException e) {
 			// remet le paquet dans la file si pb de transmission (connexion terminée)
-			if (p!=null) sendQueue.offer(p);
-			LOG.warning("Connection with client "+userId+" is broken...close it.");
-			//e.printStackTrace();
+			if (p != null)
+				sendQueue.offer(p);
+			LOG.warning("Connection with client " + userId + " is broken...close it.");
+			// e.printStackTrace();
 		} catch (InterruptedException e) {
-			throw new ServerException("Sending loop thread of "+userId+" has been interrupted.",e);
+			throw new ServerException("Sending loop thread of " + userId + " has been interrupted.", e);
 		}
 		close();
 	}
-	
+
 	/**
 	 * Method for adding a packet to the sending queue
 	 */

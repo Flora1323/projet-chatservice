@@ -18,10 +18,13 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
-import javafx.application.Platform;
 import java.net.UnknownHostException;
 import javafx.scene.layout.Region;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+
 import static fr.uga.miashs.dciss.chatservice.common.MessageType.*;
 
 public class ChatUI extends Application {
@@ -33,6 +36,11 @@ public class ChatUI extends Application {
     private TextField destField;
     private Label statusLabel;
     private VBox groupList;
+    private Map<Integer, String> groupNames = new HashMap<>();
+    // On crée un dictionnaire qui associe un ID de groupe à un nom personnalisé
+    private java.util.Map<Integer, String> customGroupNames = new java.util.HashMap<>();
+    // Une variable temporaire pour stocker le nom qu'on vient de taper
+    private String lastCreatedGroupName;
 
     @Override
     public void start(Stage stage) {
@@ -62,6 +70,22 @@ public class ChatUI extends Application {
         BorderPane root = new BorderPane(); // layout principal avec haut/bas/gauche/droite/centre
         root.setTop(header); // on met le header en haut
 
+        TextInputDialog nickDialog = new TextInputDialog("Slayyyy");
+        nickDialog.setTitle("Configuration");
+        nickDialog.setHeaderText("Bienvenue sur le chat ! 💅");
+        nickDialog.setContentText("Choisis ton petit nom de Baddies :");
+
+        nickDialog.showAndWait().ifPresent(nick -> {
+            connectToServer(); // On initialise le client
+            try {
+                // On demande au serveur de nous attribuer ce pseudo
+                client.requestSetNickname(nick);
+                stage.setTitle("Chat - " + nick);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+
         // PANNEAU GAUCHE
         VBox leftPanel = new VBox(10);
         leftPanel.setPrefWidth(150);
@@ -88,21 +112,30 @@ public class ChatUI extends Application {
 
         // BOUTON POUR CREER UN GROUPE
         createGroupBtn.setOnAction(e -> {
+            // On peut demander "Nom:ID1,ID2"
             TextInputDialog dialog = new TextInputDialog();
-            dialog.setTitle("Créer un groupe");
-            dialog.setHeaderText("Entrez les IDs des membres");
-            dialog.setContentText("IDs (ex: 2,3,4) :");
+            dialog.setHeaderText("Format : NomDuGroupe : ID1,ID2");
 
             dialog.showAndWait().ifPresent(input -> {
                 try {
-                    String[] parts = input.split(",");
-                    int[] members = new int[parts.length];
-                    for (int i = 0; i < parts.length; i++) {
-                        members[i] = Integer.parseInt(parts[i].trim());
-                    }
-                    client.requestCreateGroup(members);
+                    String[] parts = input.split(":");
+
+                    if (parts.length < 2)
+                        throw new Exception("Format incorrect");
+
+                    String gName = parts[0];
+                    String[] ids = parts[1].split(",");
+                    int[] members = new int[ids.length];
+                    for (int i = 0; i < ids.length; i++)
+                        members[i] = Integer.parseInt(ids[i].trim());
+
+                    client.requestCreateGroup(gName, members); // Envoie le nom et les membres au serveur
+
+                    this.lastCreatedGroupName = gName; // Stocke le nom du groupe qu'on vient de créer pour l'utiliser
+                                                       // dans la notification
+
                 } catch (Exception ex) {
-                    System.out.println("Format invalide");
+                    System.out.println("Format invalide. Utilisez Nom : 1,2,3");
                 }
             });
         });
@@ -218,17 +251,18 @@ public class ChatUI extends Application {
                 System.out.println("ID invalide");
             }
         });
-
-        connectToServer(); // on se connecte au serveur après avoir mis en place l'interface pour pouvoir
-                           // afficher les messages reçus
     }
 
     private Button createGroupButton(int gid) {
-        Button groupBtn = new Button("Groupe " + gid);
-        groupBtn.setId("btn-group-" + gid); // On donne un ID pour le retrouver facilement plus tard
+        // On récupère le nom dans la Map, sinon on met "Groupe ID"
+        String name = customGroupNames.getOrDefault(gid, "Groupe " + gid);
+
+        Button groupBtn = new Button(name);
+        groupBtn.setId("btn-group-" + gid);
         groupBtn.setStyle("-fx-background-color: #F4C9D6; -fx-text-fill: #3E2723; -fx-background-radius: 10;");
         groupBtn.setMaxWidth(Double.MAX_VALUE);
 
+        // Clic gauche : définit la destination du message
         groupBtn.setOnAction(ev -> destField.setText(String.valueOf(gid)));
 
         javafx.scene.control.ContextMenu menu = new javafx.scene.control.ContextMenu();
@@ -238,7 +272,7 @@ public class ChatUI extends Application {
         javafx.scene.control.MenuItem deleteGroup = new javafx.scene.control.MenuItem("🗑 Supprimer le groupe");
         javafx.scene.control.MenuItem leaveGroup = new javafx.scene.control.MenuItem("🚪 Quitter le groupe");
 
-        // Action : Ajouter
+        // Action : Ajouter un membre
         addMember.setOnAction(e -> {
             TextInputDialog dialog = new TextInputDialog();
             dialog.setHeaderText("Ajouter un membre au groupe " + gid);
@@ -246,12 +280,12 @@ public class ChatUI extends Application {
                 try {
                     client.requestAddMember(gid, Integer.parseInt(uid.trim()));
                 } catch (Exception ex) {
-                    ex.printStackTrace();
+                    System.out.println("ID invalide");
                 }
             });
         });
 
-        // Action : Exclure
+        // Action : Exclure un membre
         removeMember.setOnAction(e -> {
             TextInputDialog dialog = new TextInputDialog();
             dialog.setHeaderText("Exclure un membre du groupe " + gid);
@@ -259,12 +293,12 @@ public class ChatUI extends Application {
                 try {
                     client.requestRemoveMember(gid, Integer.parseInt(uid.trim()));
                 } catch (Exception ex) {
-                    ex.printStackTrace();
+                    System.out.println("ID invalide");
                 }
             });
         });
 
-        // Action : Supprimer
+        // Action : Supprimer le groupe
         deleteGroup.setOnAction(e -> {
             try {
                 client.requestDeleteGroup(gid);
@@ -273,7 +307,7 @@ public class ChatUI extends Application {
             }
         });
 
-        // Action : Quitter
+        // Action : Quitter le groupe
         leaveGroup.setOnAction(e -> {
             try {
                 client.requestLeaveGroup(gid);
@@ -304,9 +338,18 @@ public class ChatUI extends Application {
                     switch (type) {
                         case NOTIF_GROUP_CREATED: {
                             int gid = buf.getInt();
+                            // Lire le nom envoyé par le serveur (ASSURE-TOI QUE LE SERVEUR L'ENVOIE BIEN !)
+                            int nameLen = buf.getInt();
+                            byte[] nameBytes = new byte[nameLen];
+                            buf.get(nameBytes);
+                            String gName = new String(nameBytes, StandardCharsets.UTF_8);
+
+                            // Maintenant que le getter existe, cette ligne va fonctionner !
+                            client.getNicknamesMap().put(gid, gName);
+
                             Platform.runLater(() -> {
                                 groupList.getChildren().add(createGroupButton(gid));
-                                addMessage("✓ Groupe " + gid + " créé !", false);
+                                addMessage("✓ Vous avez rejoint le groupe : " + gName, false);
                             });
                             break;
                         }
@@ -343,17 +386,43 @@ public class ChatUI extends Application {
                             });
                             break;
                         }
+                        case NOTIF_NICKNAME_CHANGED: {
+                            int uid = buf.getInt();
+                            int len = buf.getInt();
+                            byte[] nameBytes = new byte[len];
+                            buf.get(nameBytes);
+                            String newName = new String(nameBytes, StandardCharsets.UTF_8); // on suppose que le pseudo
+                                                                                            // est encodé en UTF-8
+                            Platform.runLater(() -> addMessage("✨ " + uid + " s'appelle maintenant " + newName, false)); // on
+                                                                                                                         // affiche
+                                                                                                                         // la
+                                                                                                                         // notification
+                                                                                                                         // de
+                                                                                                                         // changement
+                                                                                                                         // de
+                                                                                                                         // pseudo
+                            break;
+                        }
                         case NOTIF_ERROR: {
                             int len = buf.getInt();
                             byte[] msg = new byte[len];
                             buf.get(msg);
-                            Platform.runLater(() -> addMessage("✗ Erreur: " + new String(msg), false));
+                            // Ajoute pour éviter les caractères bizarres
+                            Platform.runLater(
+                                    () -> addMessage("✗ Erreur: " + new String(msg, StandardCharsets.UTF_8), false));
                             break;
                         }
                     }
                 } else {
                     String msg = new String(p.data);
-                    Platform.runLater(() -> addMessage("ID " + p.srcId + ": " + msg, false));
+                    String sender = client.displayName(p.srcId); // Utilise le pseudo
+
+                    if (p.destId < 0) { // Si c'est un message de groupe
+                        String groupName = client.displayName(p.destId);
+                        Platform.runLater(() -> addMessage("[" + groupName + "] " + sender + " : " + msg, false));
+                    } else {
+                        Platform.runLater(() -> addMessage(sender + " : " + msg, false));
+                    }
                 }
             });
 

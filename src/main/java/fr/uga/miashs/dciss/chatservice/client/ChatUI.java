@@ -9,7 +9,6 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
-import javafx.scene.control.TextInputDialog;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -20,6 +19,8 @@ import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
 import java.net.UnknownHostException;
 import javafx.scene.layout.Region;
+import java.nio.ByteBuffer;
+import static fr.uga.miashs.dciss.chatservice.common.MessageType.*;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -35,6 +36,7 @@ public class ChatUI extends Application {
     private TextField inputField;
     private TextField destField;
     private Label statusLabel;
+    private VBox groupList;
     private VBox groupList;
     private Map<Integer, String> groupNames = new HashMap<>();
     // On crée un dictionnaire qui associe un ID de groupe à un nom personnalisé
@@ -53,7 +55,10 @@ public class ChatUI extends Application {
         header.setPadding(new Insets(15)); // espace intérieur
         header.setStyle("-fx-background-color: #3E2723;"); // Le titre
         Label titleLabel = new Label("💅 Baddies");
+        header.setStyle("-fx-background-color: #3E2723;"); // Le titre
+        Label titleLabel = new Label("💅 Baddies");
         titleLabel.setFont(Font.font("Arial", FontWeight.BOLD, 18)); // police en gras et taille 18
+        titleLabel.setTextFill(Color.web("#FFDEE2")); // couleur rose
         titleLabel.setTextFill(Color.web("#FFDEE2")); // couleur rose
 
         // Après titleLabel dans le header
@@ -308,6 +313,71 @@ public class ChatUI extends Application {
         });
 
         // Action : Quitter le groupe
+        leaveGroup.setOnAction(e -> {
+            try {
+                client.requestLeaveGroup(gid);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
+
+        menu.getItems().addAll(addMember, removeMember, deleteGroup, leaveGroup);
+        groupBtn.setContextMenu(menu);
+
+        return groupBtn;
+    }
+
+    private Button createGroupButton(int gid) {
+        Button groupBtn = new Button("Groupe " + gid);
+        groupBtn.setId("btn-group-" + gid); // On donne un ID pour le retrouver facilement plus tard
+        groupBtn.setStyle("-fx-background-color: #F4C9D6; -fx-text-fill: #3E2723; -fx-background-radius: 10;");
+        groupBtn.setMaxWidth(Double.MAX_VALUE);
+
+        groupBtn.setOnAction(ev -> destField.setText(String.valueOf(gid)));
+
+        javafx.scene.control.ContextMenu menu = new javafx.scene.control.ContextMenu();
+
+        javafx.scene.control.MenuItem addMember = new javafx.scene.control.MenuItem("➕ Ajouter un membre");
+        javafx.scene.control.MenuItem removeMember = new javafx.scene.control.MenuItem("➖ Exclure un membre");
+        javafx.scene.control.MenuItem deleteGroup = new javafx.scene.control.MenuItem("🗑 Supprimer le groupe");
+        javafx.scene.control.MenuItem leaveGroup = new javafx.scene.control.MenuItem("🚪 Quitter le groupe");
+
+        // Action : Ajouter
+        addMember.setOnAction(e -> {
+            TextInputDialog dialog = new TextInputDialog();
+            dialog.setHeaderText("Ajouter un membre au groupe " + gid);
+            dialog.showAndWait().ifPresent(uid -> {
+                try {
+                    client.requestAddMember(gid, Integer.parseInt(uid.trim()));
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            });
+        });
+
+        // Action : Exclure
+        removeMember.setOnAction(e -> {
+            TextInputDialog dialog = new TextInputDialog();
+            dialog.setHeaderText("Exclure un membre du groupe " + gid);
+            dialog.showAndWait().ifPresent(uid -> {
+                try {
+                    client.requestRemoveMember(gid, Integer.parseInt(uid.trim()));
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            });
+        });
+
+        // Action : Supprimer
+        deleteGroup.setOnAction(e -> {
+            try {
+                client.requestDeleteGroup(gid);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
+
+        // Action : Quitter
         leaveGroup.setOnAction(e -> {
             try {
                 client.requestLeaveGroup(gid);

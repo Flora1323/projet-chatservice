@@ -17,6 +17,7 @@ import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import fr.uga.miashs.dciss.chatservice.common.Packet;
@@ -43,6 +44,7 @@ public class ClientMsg {
 
 	private List<MessageListener> mListeners;
 	private List<ConnectionListener> cListeners;
+	private final Map<Integer, String> nicknames = new ConcurrentHashMap<>();
 
 	/**
 	 * Create a client with an existing id, that will connect to the server at the
@@ -245,6 +247,21 @@ public class ClientMsg {
 		sendPacket(0,bos.toByteArray());
 	}
 
+	public void requestSetNickname(String nickname) throws IOException{
+		ByteArrayOutputStream bos = new ByteArrayOutputStream();
+		DataOutputStream dos = new DataOutputStream(bos);
+		byte[] nameBytes = nickname.getBytes(StandardCharsets.UTF_8);
+		dos.writeByte(SET_NICKNAME);
+		dos.writeInt(nameBytes.length);
+		dos.write(nameBytes);
+		dos.flush();
+		sendPacket(0,bos.toByteArray());
+	}
+
+	public String displayName(int id) {
+		return nicknames.getOrDefault(id, "User" + id);
+	}
+
 
 
 	public static void main(String[] args) throws UnknownHostException, IOException, InterruptedException {
@@ -292,12 +309,25 @@ public class ClientMsg {
 						System.out.println("✗ ERREUR: " + new String(msg, StandardCharsets.UTF_8));
 						break;
 					}
+
+					case NOTIF_NICKNAME_CHANGED: {
+						int uid = buf.getInt();
+						int len = buf.getInt();
+						byte[] name = new byte[len];
+						buf.get(name);
+						String newName = new String(name, StandardCharsets.UTF_8);
+						c.nicknames.put(uid, newName);
+						System.out.println("✓ User " + uid + " s'appelle désormais '" + newName + "'");
+						break;
+					}
 					default:
 						System.out.println("Notification inconnue: type=" + type);
 				}
 			} else {
 				// Message normal (privé ou groupe)
-				System.out.println(p.srcId + " says to " + p.destId + ": " + new String(p.data));
+				String from = c.displayName(p.srcId);
+				String to = (p.destId < 0) ? ("groupe " + p.destId) : c.displayName(p.destId);
+				System.out.println(from + " says to " + to + ": " + new String(p.data));
 			}
 		});
 
@@ -335,7 +365,7 @@ public class ClientMsg {
 		String lu = null;
 		while(!"\\quit".equals(lu)){
 			try{
-				System.out.println("A qui voulez vous écrire ? (ou /new, /add, /rm, /del, /leave, /quit)");
+				System.out.println("A qui voulez vous écrire ? (ou /new, /add, /rm, /del, /leave, /nick, /quit)");
 				String ligne =sc.nextLine().trim();//sc.nextLine() lis toute la ligne, trim() enlève les spaces
 				if (ligne.isEmpty()) continue;
 				if(ligne.startsWith("/")) { //如果/开始就是一个命令
@@ -363,7 +393,8 @@ public class ClientMsg {
 							for(int i = 0; i<ids.length;i++) 
 								members [i] = Integer.parseInt(ids[i].trim());
 							c.requestCreateGroup(members);
-							System.out.println("Demande: créer groupe avec membres " + sb + " envoyée");
+							int gid = Integer.parseInt(parts[1]);
+							System.out.println("Demande: créer groupe " + gid +" avec membres " + sb + " envoyée");
 							break;
 						}
 
@@ -408,6 +439,22 @@ public class ClientMsg {
 
 						case "/quit": {
 							lu = "\\quit";
+							break;
+						}
+
+						case"/nick" : {
+							if(parts.length < 2) {
+								System.out.println("Usage: /nick <nouveau_pseudo>");
+								break;
+							}
+
+							StringBuilder sb = new StringBuilder();
+							for (int i = 1; i < parts.length; i++) {
+								if (i > 1) sb.append(" ");
+								sb.append(parts[i]);
+							}
+							c.requestSetNickname(sb.toString());
+							System.out.println("Demande: changer pseudo en '" + sb + "' envoyée");
 							break;
 						}
 

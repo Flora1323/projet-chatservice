@@ -16,4 +16,8 @@ public final class MessageType {
     public static final byte NOTIF_MEMBER_REMOVED = 3;
     public static final byte NOTIF_GROUP_DELETED  = 4;
     public static final byte NOTIF_ERROR          = 5;
+
+    //nickname
+    public static final byte SET_NICKNAME = 6;
+    public static final byte NOTIF_NICKNAME_CHANGED = 6;
 }

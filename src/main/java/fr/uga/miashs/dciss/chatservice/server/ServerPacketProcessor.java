@@ -73,6 +73,10 @@ public class ServerPacketProcessor implements PacketProcessor {
 				continue;
 			}
 			g.addMember(u);
+			//System.out.println("Notification MEMBER_ADDED envoyée à tous pour membre " + memberId);
+			notifyMemberAdded(g, memberId); // ajoute une notification pour chaque membre ajouté, même le propriétaire,
+											// pour que tous les membres soient au courant de la création du groupe et
+											// de ses membres
 		}
 		LOG.info("Group " + g.getId() + " creé par" + ownerId);
 		notifyGroupCreated(ownerId, g.getId());

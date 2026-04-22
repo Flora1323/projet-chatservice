@@ -14,10 +14,13 @@ package fr.uga.miashs.dciss.chatservice.client;
 import java.io.*;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import fr.uga.miashs.dciss.chatservice.common.Packet;
+import static fr.uga.miashs.dciss.chatservice.common.MessageType.*;
 
 /**
  * Manages the connection to a ServerMsg. Method startSession() is used to
@@ -185,6 +188,64 @@ public class ClientMsg {
 		s = null;
 		notifyConnectionListeners(false);
 	}
+	//客户端向服务器发送一个“创建群组”的请求
+	public void requestCreateGroup(int[] memberIds) throws IOException{
+		ByteArrayOutputStream bos = new ByteArrayOutputStream();
+		//在内存里准备一个字节缓冲区，把你要发送的数据先装进去
+		DataOutputStream dos = new DataOutputStream(bos);
+		//方便按类型往 bos 里写数据，比如写 byte、写 int
+
+		dos.writeByte(CREATE_GROUP);//命令的 type
+		dos.writeInt(memberIds.length);//成员数量
+		for (int id: memberIds) {
+			dos.writeInt(id);
+		}
+		//[type=1][nb=2][1][3]
+
+		dos.flush();//把 DataOutputStream 里还没真正写进 bos 的内容全部推过去
+		sendPacket(0,bos.toByteArray());
+		//bos.toByteArray()把前面写进去的所有数据取出来，变成一个byte[] 就是最后的data
+		//0 表示发给server
+	}
+
+	public void requestDeleteGroup(int groupId) throws IOException{
+		ByteArrayOutputStream bos = new ByteArrayOutputStream();
+		DataOutputStream dos = new DataOutputStream(bos);
+		dos.writeByte(SUPPRIME_GROUP);
+		dos.writeInt(groupId);
+		dos.flush();
+		sendPacket(0,bos.toByteArray());
+	}
+
+	public void requestAddMember(int groupId, int userId) throws IOException{
+		ByteArrayOutputStream bos = new ByteArrayOutputStream();
+		DataOutputStream dos = new DataOutputStream(bos);
+		dos.writeByte(AJOUT_MEMBRE);
+		dos.writeInt(groupId);
+		dos.writeInt(userId);
+		dos.flush();
+		sendPacket(0,bos.toByteArray());
+	}
+	public void requestRemoveMember(int groupId, int userId) throws IOException{
+		ByteArrayOutputStream bos = new ByteArrayOutputStream();
+		DataOutputStream dos = new DataOutputStream(bos);
+		dos.writeByte(SUPPRIME_MEMBRE);
+		dos.writeInt(groupId);
+		dos.writeInt(userId);
+		dos.flush();
+		sendPacket(0,bos.toByteArray());
+	}
+
+	public void requestLeaveGroup(int groupId) throws IOException{
+		ByteArrayOutputStream bos = new ByteArrayOutputStream();
+		DataOutputStream dos = new DataOutputStream(bos);
+		dos.writeByte(LEAVE_GROUP);
+		dos.writeInt(groupId);
+		dos.flush();
+		sendPacket(0,bos.toByteArray());
+	}
+
+
 
 	public static void main(String[] args) throws UnknownHostException, IOException, InterruptedException {
 		// ClientMsg c = new ClientMsg("localhost", 1666);
@@ -196,7 +257,49 @@ public class ClientMsg {
 		ClientMsg c = new ClientMsg(id, host,1666);
 
 		// add a dummy listener that print the content of message as a string
-		c.addMessageListener(p -> System.out.println(p.srcId + " says to " + p.destId + ": " + new String(p.data)));
+		c.addMessageListener(p -> {
+			// 如果 srcId == 0 -> 这是服务器发来的通知(Actions serveur -> client)
+			if (p.srcId == 0 && p.data != null && p.data.length >= 1) {
+				ByteBuffer buf = ByteBuffer.wrap(p.data);
+				byte type = buf.get();
+				switch (type) {
+					case NOTIF_GROUP_CREATED: {
+						int gid = buf.getInt();
+						System.out.println("✓ Groupe " + gid + " créé avec succès");
+						break;
+					}
+					case NOTIF_MEMBER_ADDED: {
+						int gid = buf.getInt();
+						int uid = buf.getInt();
+						System.out.println("✓ User " + uid + " ajouté au groupe " + gid);
+						break;
+					}
+					case NOTIF_MEMBER_REMOVED: {
+						int gid = buf.getInt();
+						int uid = buf.getInt();
+						System.out.println("✓ User " + uid + " retiré du groupe " + gid);
+						break;
+					}
+					case NOTIF_GROUP_DELETED: {
+						int gid = buf.getInt();
+						System.out.println("✓ Groupe " + gid + " supprimé");
+						break;
+					}
+					case NOTIF_ERROR: {
+						int len = buf.getInt();
+						byte[] msg = new byte[len];
+						buf.get(msg);
+						System.out.println("✗ ERREUR: " + new String(msg, StandardCharsets.UTF_8));
+						break;
+					}
+					default:
+						System.out.println("Notification inconnue: type=" + type);
+				}
+			} else {
+				// Message normal (privé ou groupe)
+				System.out.println(p.srcId + " says to " + p.destId + ": " + new String(p.data));
+			}
+		});
 
 		// add a connection listener that exit application when connection closed
 		c.addConnectionListener(active -> {
@@ -210,7 +313,7 @@ public class ClientMsg {
 		// Thread.sleep(5000);
 
 		// l'utilisateur avec id 4 crée un grp avec 1 et 3 dedans (et lui meme)
-		if (c.getIdentifier() == 4) {
+		/*if (c.getIdentifier() == 4) {
 			ByteArrayOutputStream bos = new ByteArrayOutputStream();
 			DataOutputStream dos = new DataOutputStream(bos);
 
@@ -226,11 +329,107 @@ public class ClientMsg {
 
 			c.sendPacket(0, bos.toByteArray());
 
-		}
+		}*/
 
 		Scanner sc = new Scanner(System.in);
 		String lu = null;
-		while (!"\\quit".equals(lu)) {
+		while(!"\\quit".equals(lu)){
+			try{
+				System.out.println("A qui voulez vous écrire ? (ou /new, /add, /rm, /del, /leave, /quit)");
+				String ligne =sc.nextLine().trim();//sc.nextLine() lis toute la ligne, trim() enlève les spaces
+				if (ligne.isEmpty()) continue;
+				if(ligne.startsWith("/")) { //如果/开始就是一个命令
+					String[] parts = ligne.split("\\s+");//split多个空白格拆分字符串
+					/*parts[0] = "/add"
+					  parts[1] = "-1"
+					 parts[2] = "5" */
+					 String cmd = parts[0];
+					 switch(cmd) {
+						case "/new": {
+							// Syntaxe: /new 2,3,4  (liste des membres séparée par virgules,
+							// sans id de groupe : le serveur attribue automatiquement un id négatif)
+							if (parts.length < 2) {
+								System.out.println("Usage: /new <id1,id2,...>   ex: /new 2,3,4");
+								break;
+							}
+							// On concatène parts[1..] au cas où l'utilisateur ait mis des espaces
+							StringBuilder sb = new StringBuilder();
+							for (int i = 1; i < parts.length; i++) {
+								if (i > 1) sb.append(",");
+								sb.append(parts[i]);
+							}
+							String [] ids = sb.toString().split(",");
+							int[] members = new int [ids.length];
+							for(int i = 0; i<ids.length;i++) 
+								members [i] = Integer.parseInt(ids[i].trim());
+							c.requestCreateGroup(members);
+							System.out.println("Demande: créer groupe avec membres " + sb + " envoyée");
+							break;
+						}
+
+						case "/del" : {
+							// /del -1 Supprime groupe -1
+							int gid = Integer.parseInt(parts[1]);
+							c.requestDeleteGroup(gid);
+							System.out.println("Demande: supprimer le groupe " + gid + " envoyée");
+							break;
+						}
+
+						case "/add" : {
+							// /add -1 5,6 ajoute pluseirus/une seul personne dans le groupe -1
+							int gid = Integer.parseInt(parts[1]);
+							//int uid = Integer.parseInt(parts[2]); suelment un ajout possible
+							String[] uids = parts[2].split(",");
+							for(String uidSr: uids){
+								int uid = Integer.parseInt(uidSr.trim());
+								c.requestAddMember(gid,uid);
+							}
+							System.out.println("Demande d'ajout envoyée: " + parts[2] + " dans " + gid);
+							break;
+						}
+
+						case "/rm" : {
+							// /rm -1 5 supprime 5 dans le groupe -1
+							int gid = Integer.parseInt(parts[1]);
+							int uid = Integer.parseInt(parts[2]);
+							c.requestRemoveMember(gid,uid);
+							System.out.println("Demande: retirer " + uid + " de " + gid + " envoyée");
+							break;
+						}
+
+						case "/leave" : {
+							//leave -1
+							int gid = Integer.parseInt(parts[1]);
+							c.requestLeaveGroup(gid);
+							System.out.println("Demande: quitter le groupe " + gid + " envoyée");
+							break;
+
+						}
+
+						case "/quit": {
+							lu = "\\quit";
+							break;
+						}
+
+						default : 
+							System.out.println ("Commande inconnue");
+					 } 
+					 Thread.sleep(500); 
+					} else {
+						//envoie de messages directs à un autre utilisateurs
+						int dest = Integer.parseInt(ligne);
+						System.out.println("Votre message ? ");
+						lu = sc.nextLine();
+						c.sendPacket(dest,lu.getBytes());
+						//lu.getBytes() 把字符串String转成byte字节数组
+					}
+
+
+				} catch (Exception e) {
+					System.out.println("Mauvais format: " + e.getMessage());
+			}
+		
+		/*while (!"\\quit".equals(lu)) {
 			try {
 				System.out.println("A qui voulez vous écrire ? ");
 				int dest = Integer.parseInt(sc.nextLine());
@@ -240,7 +439,7 @@ public class ClientMsg {
 				c.sendPacket(dest, lu.getBytes());
 			} catch (InputMismatchException | NumberFormatException e) {
 				System.out.println("Mauvais format");
-			}
+			}*/
 
 		}
 
@@ -255,5 +454,6 @@ public class ClientMsg {
 		c.closeSession();
 
 	}
+
 
 }

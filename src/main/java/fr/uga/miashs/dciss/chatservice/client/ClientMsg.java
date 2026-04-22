@@ -290,7 +290,7 @@ public class ClientMsg {
 					switch(cmd) {
 						// --- FUSION : Ajout de la commande /history ---
 						case "/history":
-							c.history.afficherHistorique();
+							c.history.afficherHistorique(c.getIdentifier());
 							break;
 
 						case "/new": {

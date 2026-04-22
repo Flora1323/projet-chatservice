@@ -12,6 +12,7 @@
 package fr.uga.miashs.dciss.chatservice.server;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.logging.Logger;
 
 import fr.uga.miashs.dciss.chatservice.common.Packet;
@@ -53,6 +54,10 @@ public class ServerPacketProcessor implements PacketProcessor {
 
 			case LEAVE_GROUP:
 				leaveGroup(p.srcId, buf);
+				break;
+			
+			case SET_NICKNAME:
+				setNickname(p.srcId, buf);
 				break;
 
 			default:
@@ -184,6 +189,50 @@ public class ServerPacketProcessor implements PacketProcessor {
 			notifyError(srcId, "Vous n'êtes pas membre du groupe " + groupId + ".");
 		}
 
+	}
+
+	private void setNickname(int srcId, ByteBuffer buf) {
+		int len = buf.getInt();
+		byte[] nameBytes = new byte[len];
+		buf.get(nameBytes);
+		String newNick = new String(nameBytes, StandardCharsets.UTF_8).trim();
+
+		if (newNick.isEmpty() || newNick.length() > 32) {
+			notifyError(srcId, "Nickname invalide (1-32 caractères)");
+			return;
+		}
+
+		UserMsg u = server.getUser(srcId);
+		if (u == null) {
+			notifyError(srcId, "Utilisateur introuvable");
+			return;
+		}
+
+		u.setNickname(newNick);
+		LOG.info("User " + srcId + " a changé son pseudo en '" + newNick + "'");
+		notifyNicknameChanged(u);
+	}
+
+	private void notifyNicknameChanged(UserMsg u) {
+		byte[] nameBytes = u.getNickname().getBytes(StandardCharsets.UTF_8);
+		ByteBuffer buf = ByteBuffer.allocate(1 + 4 + 4 + nameBytes.length);
+		buf.put(NOTIF_NICKNAME_CHANGED);
+		buf.putInt(u.getId());
+		buf.putInt(nameBytes.length);
+		buf.put(nameBytes);
+		byte[] data = buf.array();
+		
+		// 通知自己 + 同群的人（去重）
+		java.util.Set<Integer> done = new java.util.HashSet<>();
+		done.add(u.getId());
+		sendNotification(u.getId(), data);
+		for (GroupMsg g : u.getGroups()) {
+			for (UserMsg m : g.getMembers()) {
+				if (done.add(m.getId())) {
+					sendNotification(m.getId(), data);
+				}
+			}
+		}
 	}
 
 	// Notification en format byte[] à un utilisateur spécifique

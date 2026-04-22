@@ -258,8 +258,15 @@ public class ClientMsg {
 		ClientMsg c = new ClientMsg(host, 1666);
 
 		// add a dummy listener that print the content of message as a string
-		c.addMessageListener(p -> System.out.println(p.srcId + " says to " + p.destId + ": " + new String(p.data)));
-
+		c.addMessageListener(p -> {
+		    // Si c'est un fichier (byte 2), on n'affiche PAS comme du texte
+		    if (p.data[0] == 2) {
+		        return; // Le listener fichier s'en occupe
+		    }
+		    // Sinon c'est un message texte, on l'affiche normalement
+		    System.out.println(p.srcId + " says to " + p.destId + ": " + new String(p.data));
+		});
+		
 		// add a connection listener that exit application when connection closed
 		c.addConnectionListener(active -> {
 			if (!active)

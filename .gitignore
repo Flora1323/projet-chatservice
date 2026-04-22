@@ -1,2 +1,5 @@
 /target/
 .DS_Store
+# Fichiers générés par les tests
+fichiers_recus/
+server_state.ser

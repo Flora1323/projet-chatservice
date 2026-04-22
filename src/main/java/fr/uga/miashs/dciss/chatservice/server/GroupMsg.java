@@ -11,71 +11,88 @@
 
 package fr.uga.miashs.dciss.chatservice.server;
 
+import java.io.Serializable;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListSet;
 
 import fr.uga.miashs.dciss.chatservice.common.Packet;
 
-public class GroupMsg implements PacketProcessor {
+public class GroupMsg implements PacketProcessor,  Serializable {
+	private static final long serialVersionUID = 1L; // implementation de Serializable pour permettre la sérialisation de l'état du serveur
 
 	private int groupId;
 	private UserMsg owner;
 	private Set<UserMsg> members;
-	
+
 	public GroupMsg(int groupId, UserMsg owner) {
-		if (groupId>-1) throw new IllegalArgumentException("id must not be less than 0");
-		if (owner==null) throw new IllegalArgumentException("owner cannot be null");
-		this.groupId=groupId;
-		this.owner=owner;
-		members=Collections.synchronizedSet(new HashSet<>());
+		if (groupId > -1)
+			throw new IllegalArgumentException("Group id must be negative (less than 0)");
+		if (owner == null)
+			throw new IllegalArgumentException("owner cannot be null");
+		this.groupId = groupId;
+		this.owner = owner;
+		members = Collections.synchronizedSet(new HashSet<>());
 		addMember(owner);
 	}
-	
+
 	public int getId() {
 		return groupId;
 	}
-	
+
 	/**
 	 * This method has to be used to add a member to the group.
-	 * It update the bidirectional relationship, i.e. the user is added to the group and the the group is added to the user.
+	 * It update the bidirectional relationship, i.e. the user is added to the group
+	 * and the the group is added to the user.
+	 * 
 	 * @param s
 	 * @return
 	 */
 	public boolean addMember(UserMsg s) {
-		return s!=null && members.add(s) && s.getGroups().add(this);
+		return s != null && members.add(s) && s.getGroups().add(this);
 	}
-	
+
 	/**
 	 * This method has to be used to remove a member from the group.
-	 * It update the bidirectional relationship, i.e. the user is removed from the group and the the group is removed from the user.
+	 * It update the bidirectional relationship, i.e. the user is removed from the
+	 * group and the the group is removed from the user.
+	 * 
 	 * @param s
 	 * @return
 	 */
 	public boolean removeMember(UserMsg s) {
-		if (s.equals(owner)) return false;
+		if (s.equals(owner))
+			return false;
 		if (members.remove(s)) {
 			s.removeGroup(this);
 			return true;
 		}
 		return false;
 	}
-	
+
+
 	@Override
 	public void process(Packet p) {
 		// send packet to members except the sender.
-		members.stream().filter(m->m.getId()!=p.srcId).forEach( m -> m.process(p));
+		members.stream().filter(m -> m.getId() != p.srcId).forEach(m -> m.process(p));
 	}
-	
-	// to be used carrefully, because it does not update birectional relationship in case of addition or removal.
+
+	// to be used carrefully, because it does not update birectional relationship in
+	// case of addition or removal.
 	protected Set<UserMsg> getMembers() {
 		return members;
 	}
-	
+
 	/*
-	 * This method has to be called when removing a group in order to clean bidirectional membership.
+	 * This method has to be called when removing a group in order to clean
+	 * bidirectional membership.
 	 */
 	public void beforeDelete() {
-		members.forEach(m->m.getGroups().remove(this));
+		members.forEach(m -> m.getGroups().remove(this));
+	}
+
+	/*Verifier le message vient de l'owner ou non */
+	public UserMsg getOwner() {
+		return owner;
 	}
 
 }

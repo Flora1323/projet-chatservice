@@ -11,21 +11,23 @@
 
 package fr.uga.miashs.dciss.chatservice.common;
 
+import java.io.Serializable;
+
 /*
  * Data structure to represent a packet
  */
-public class Packet {
+public class Packet implements Serializable {
+	private static final long serialVersionUID = 1L; // permet de garder les messages jusqu'à ce que l'utilisateur se reconnecte. 
 
 	public final int srcId;
 	public final int destId;
 	public final byte[] data;
-	
+
 	public Packet(int srcId, int destId, byte[] data) {
 		super();
 		this.srcId = srcId;
 		this.destId = destId;
 		this.data = data;
 	}
-	
-	
+
 }

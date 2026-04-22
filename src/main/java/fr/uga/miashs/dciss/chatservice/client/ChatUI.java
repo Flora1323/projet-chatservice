@@ -39,12 +39,10 @@ public class ChatUI extends Application {
 
         HBox header = new HBox(); // aligne les éléments horizontalement
         header.setPadding(new Insets(15)); // espace intérieur
-        header.setStyle("-fx-background-color: #007FFF;"); // bleu azur
-
-        // Le titre
-        Label titleLabel = new Label("📱 Chat");
+        header.setStyle("-fx-background-color: #3E2723;"); // Le titre
+        Label titleLabel = new Label("💅 Chat");
         titleLabel.setFont(Font.font("Arial", FontWeight.BOLD, 18)); // police en gras et taille 18
-        titleLabel.setTextFill(Color.WHITE); // couleur du texte en blanc
+        titleLabel.setTextFill(Color.web("#FFDEE2")); // couleur rose
 
         // Après titleLabel dans le header
 
@@ -70,18 +68,17 @@ public class ChatUI extends Application {
         // ####################################
 
         messagesBox = new VBox(8); // boite qui aligne les éléments verticalement + affichage des messages, 8 =
-                                        // espace entre les messages
+                                   // espace entre les messages
         messagesBox.setPadding(new Insets(15)); // espace intérieur
-        messagesBox.setStyle("-fx-background-color: #ECE5DD;"); // fond beige
+        messagesBox.setStyle("-fx-background-color: #FDF0F4;");
 
         HBox destBar = new HBox(10); // barre pour saisir l'id du destinataire, 10 = espace entre les éléments
         destBar.setPadding(new Insets(8, 15, 8, 15));// espace intérieur (haut, droite, bas, gauche)
-        destBar.setStyle("-fx-background-color: #187db4ff;"); // bleu plus foncé que le header pour différencier, avec
-                                                              // un peu de transparence
+        destBar.setStyle("-fx-background-color: #F4C9D6;");
         destBar.setAlignment(Pos.CENTER_LEFT); // aligne les éléments à gauche
 
         Label destLabel = new Label("À :"); // label pour indiquer que c'est le champ du destinataire
-        destLabel.setTextFill(Color.WHITE); // couleur du texte en blanc
+        destLabel.setTextFill(Color.web("#3E2723")); // couleur du texte en blanc
         destLabel.setFont(Font.font("Arial", FontWeight.BOLD, 13)); // police en gras et taille 13
 
         destField = new TextField(); // champ de saisie pour l'id du destinataire
@@ -98,9 +95,8 @@ public class ChatUI extends Application {
 
         scrollPane = new ScrollPane(messagesBox); // permet de scroller quand il y a beaucoup de messages
         scrollPane.setFitToWidth(true); // fait en sorte que les messages prennent toute la largeur disponible
-        scrollPane.setStyle("-fx-background-color: #ECE5DD; -fx-background: #ECE5DD;"); // même fond que messagesBox
-                                                                                        // pour éviter les zones
-                                                                                        // blanches
+        scrollPane.setStyle("-fx-background-color: #FDF0F4; -fx-background: #FDF0F4;");
+        // blanches
 
         root.setCenter(scrollPane); // on met la zone messages au centre
 
@@ -110,7 +106,7 @@ public class ChatUI extends Application {
 
         HBox bottomBar = new HBox(8); // aligne le champ et le bouton horizontalement, 8 = espace entre les éléments
         bottomBar.setPadding(new Insets(10)); // espace intérieur
-        bottomBar.setStyle("-fx-background-color: #F0F0F0;"); // gris clair
+        bottomBar.setStyle("-fx-background-color: #F4C9D6;");
         bottomBar.setAlignment(Pos.CENTER_LEFT); // aligne les éléments à gauche
 
         // Champ de saisie
@@ -123,11 +119,11 @@ public class ChatUI extends Application {
         // Bouton envoyer
         Button sendButton = new Button("➤");
         sendButton.setStyle(
-                "-fx-background-color: #007FFF; -fx-text-fill: white; " +
-                        "-fx-background-radius: 20; -fx-font-size: 16; -fx-padding: 5 15 5 15;"); // bleu azur, texte
-                                                                                                  // blanc, arrondi,
-                                                                                                  // taille de police
-                                                                                                  // 16, padding
+                "-fx-background-color: #3E2723; -fx-text-fill: white; "
+                        + "-fx-background-radius: 20; -fx-font-size: 16; -fx-padding: 5 15 5 15;"); // bleu azur, texte
+        // blanc, arrondi,
+        // taille de police
+        // 16, padding
 
         bottomBar.getChildren().addAll(inputField, sendButton); // on ajoute le champ et le bouton à la barre du bas
         root.setBottom(bottomBar); // on met la barre en bas
@@ -151,7 +147,7 @@ public class ChatUI extends Application {
                 client.sendPacket(destId, msg.getBytes()); // on envoie le message au serveur pour qu'il le redirige au
                                                            // destinataire
                 addMessage(msg, true); // on affiche le message dans la zone de messages (true
-                                                                // = c'est un message envoyé par moi)
+                                       // = c'est un message envoyé par moi)
                 inputField.clear();
             } catch (NumberFormatException ex) {
                 System.out.println("ID invalide");
@@ -218,7 +214,7 @@ public class ChatUI extends Application {
 
         if (isMine) {
             // bulle bleu à droite
-            bubble.setStyle("-fx-background-color: #90D5FF; -fx-background-radius: 15 15 0 15;");
+            bubble.setStyle("-fx-background-color: #F4C9D6; -fx-background-radius: 15 15 0 15;");
             container.setAlignment(Pos.CENTER_RIGHT); // aligne la bulle à droite
         } else {
             // bulle blanche à gauche

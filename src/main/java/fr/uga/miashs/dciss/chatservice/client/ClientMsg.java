@@ -35,6 +35,7 @@ public class ClientMsg {
 	private List<ConnectionListener> cListeners;
 	
 	private LocalHistoryManager history = new LocalHistoryManager();
+	private final Map<Integer, String> nicknames = new ConcurrentHashMap<>();
 
 
 	public ClientMsg(int id, String address, int port) {

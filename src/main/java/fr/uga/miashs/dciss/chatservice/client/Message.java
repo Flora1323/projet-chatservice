@@ -2,6 +2,7 @@ package fr.uga.miashs.dciss.chatservice.client;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -98,6 +99,25 @@ public class Message {
         }
         return messages;
     }
+    
+    public static List<Contact> getAllContacts() {
+        List<Contact> liste = new ArrayList<>();
+        // Adapte le nom de la table et des colonnes selon ce que tu as créé ce matin
+        String query = "SELECT id, nickname FROM contacts"; 
+        
+        try (Connection conn = DB.connect();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+             
+            while (rs.next()) {
+                liste.add(new Contact(rs.getInt("id"), rs.getString("nickname")));
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur chargement contacts : " + e.getMessage());
+        }
+        return liste;
+    }
+    
     // Sauvegarder un fichier (juste le chemin)
     public static void saveFile(int messageId, String path) throws Exception {
         try {

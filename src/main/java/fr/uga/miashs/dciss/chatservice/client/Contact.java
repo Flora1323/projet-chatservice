@@ -3,6 +3,17 @@ package fr.uga.miashs.dciss.chatservice.client;
 import java.sql.*;
 
 public class Contact {
+	private int id;
+    private String nickname;
+
+    public Contact(int id, String nickname) {
+        this.id = id;
+        this.nickname = nickname;
+    }
+
+    public int getId() { return id; }
+    public String getNickname() { return nickname; }
+
 
     public static void addContact(int id, String nickname) {
         try {

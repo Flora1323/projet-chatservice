@@ -21,6 +21,9 @@ import java.util.Map;
 import java.util.List;
 
 
+import javafx.stage.FileChooser;
+import java.io.File;
+
 import static fr.uga.miashs.dciss.chatservice.common.MessageType.*;
 
 public class ChatUI extends Application {
@@ -189,6 +192,42 @@ public class ChatUI extends Application {
 
         root.setCenter(scrollPane); // on met la zone messages au centre
 
+        // --- BOUTON FICHIER ---
+        Button fileButton = new Button("📎");
+        fileButton.setStyle(
+                "-fx-background-color: #3E2723; -fx-text-fill: white; " +
+                        "-fx-background-radius: 20; -fx-font-size: 16; -fx-padding: 5 12 5 12;");
+
+        fileButton.setOnAction(e -> {
+            String destText = destField.getText().trim();
+            if (destText.isEmpty()) {
+                addMessage("⚠️ Choisis un destinataire avant d'envoyer un fichier !", false);
+                return;
+            }
+
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("Choisir un fichier à envoyer 💅");
+            File selectedFile = fileChooser.showOpenDialog(stage);
+
+            if (selectedFile != null) {
+                try {
+                    int destId = Integer.parseInt(destText);
+
+                    // 1. Envoi réel via le réseau
+                    client.envoyerFichier(destId, selectedFile);
+
+                    // 2. Affichage visuel dans TON chat (bulle rose à droite)
+                    afficherFichierEnvoye(selectedFile, selectedFile.getName());
+
+                } catch (NumberFormatException ex) {
+                    addMessage("✗ ID destinataire invalide", false);
+                } catch (Exception ex) {
+                    addMessage("✗ Erreur lors de l'envoi du fichier", false);
+                    ex.printStackTrace();
+                }
+            }
+        });
+
         // ####################################
         // LE BAS DE LA FENETRE
         // ####################################
@@ -204,14 +243,17 @@ public class ChatUI extends Application {
         inputField.setStyle("-fx-background-radius: 20; -fx-padding: 8 15 8 15;"); // arrondit les bords et ajoute du
                                                                                    // padding
         HBox.setHgrow(inputField, Priority.ALWAYS); // prend tout l'espace disponible
-        
+
         // Bouton envoyer
         Button sendButton = new Button("➤");
         sendButton.setStyle(
                 "-fx-background-color: #3E2723; -fx-text-fill: white; "
                         + "-fx-background-radius: 20; -fx-font-size: 16; -fx-padding: 5 15 5 15;"); // bleu azur, texte
 
-                        
+        // --- LES LIGNES MANQUANTES ---
+        bottomBar.getChildren().addAll(fileButton, inputField, sendButton); // On assemble tout
+        root.setBottom(bottomBar); // On attache la barre au bas de la fenêtre
+
         // ####################################
         // Action du bouton envoyer
         // ####################################
@@ -239,8 +281,7 @@ public class ChatUI extends Application {
                 System.out.println("ID invalide");
             }
         });
-      
-        
+
         // Envoyer aussi avec la touche Entrée
         inputField.setOnAction(e -> {
             String msg = inputField.getText().trim();
@@ -337,11 +378,11 @@ public class ChatUI extends Application {
 
             // quand on reçoit un message, on l'affiche à gauche
             client.addMessageListener(p -> {
-            	// Si c'est un fichier (byte 2)
-            	if (p.data != null && p.data.length > 0 && p.data[0] == 2) {
-            	    recevoirFichierUI(p);
-            	    return;
-            	}
+                // Si c'est un fichier (byte 2)
+                if (p.data != null && p.data.length > 0 && p.data[0] == 2) {
+                    recevoirFichierUI(p);
+                    return;
+                }
                 if (p.srcId == 0 && p.data != null && p.data.length >= 1) {
                     ByteBuffer buf = ByteBuffer.wrap(p.data);
                     byte type = buf.get();
@@ -429,7 +470,7 @@ public class ChatUI extends Application {
                             contactList.getChildren().clear();
                             afficherListeContacts();
                             });                                                                                           
-                            break;
+
                         }
                         case NOTIF_ALL_NICKNAMES: {
                             int nb = buf.getInt();
@@ -443,10 +484,12 @@ public class ChatUI extends Application {
                             }
                             Platform.runLater(() -> {
                                 String monNom = client.displayName(client.getIdentifier());
+
                                 statusLabel.setText("Connecté en tant que : " + monNom + " (ID : " + client.getIdentifier() + ")");
                                 
                                 contactList.getChildren().clear();
                                 afficherListeContacts();
+
                             });
                             break;
                         }
@@ -667,55 +710,58 @@ public class ChatUI extends Application {
 
         // On retire de la VBox groupList tout composant qui correspond à cet ID
         groupList.getChildren().removeIf(node -> targetId.equals(node.getId()));
-    } 
-    
+    }
+
     private void recevoirFichierUI(fr.uga.miashs.dciss.chatservice.common.Packet p) {
         try {
             java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(p.data);
             java.io.DataInputStream dis = new java.io.DataInputStream(bis);
-            
-            byte type = dis.readByte();                       // lis le type
-            int tailleNom = dis.readInt();                    // lis la taille du nom
-            
+
+            byte type = dis.readByte(); // lis le type
+            int tailleNom = dis.readInt(); // lis la taille du nom
+
             byte[] nameBytes = new byte[tailleNom];
             dis.readFully(nameBytes);
             String nomFichier = new String(nameBytes);
-            
+
             int tailleFichier = dis.readInt();
             byte[] fileBytes = new byte[tailleFichier];
             dis.readFully(fileBytes);
-            
+
             // Sauvegarder le fichier
             java.io.File dossier = new java.io.File("fichiers_recus");
-            if (!dossier.exists()) dossier.mkdirs();
+            if (!dossier.exists())
+                dossier.mkdirs();
             java.io.File fichierRecu = new java.io.File(dossier, nomFichier);
             java.nio.file.Files.write(fichierRecu.toPath(), fileBytes);
+
             
-            Message.sauvegarderMessage(p.srcId, client.getIdentifier(), "[FICHIER]:" + nomFichier);
-            
+           // Message.sauvegarderMessage(p.srcId, client.getIdentifier(), "[FICHIER]:" + nomFichier);
+        
             // Afficher dans l'interface selon le type
             String sender = client.displayName(p.srcId);
             Platform.runLater(() -> afficherFichier(fichierRecu, nomFichier, sender));
-            
+
         } catch (java.io.IOException e) {
             e.printStackTrace();
         }
     }
+
     private void afficherFichier(java.io.File fichier, String nomFichier, String sender) {
         HBox container = new HBox();
         container.setAlignment(Pos.CENTER_LEFT);
-        
+
         VBox bubble = new VBox(5);
         bubble.setPadding(new Insets(8, 12, 8, 12));
         bubble.setStyle("-fx-background-color: white; -fx-background-radius: 15 15 15 0;");
         bubble.setMaxWidth(320);
-        
+
         // Nom de l'expéditeur
         Label senderLabel = new Label(sender);
         senderLabel.setFont(Font.font("Arial", FontWeight.BOLD, 11));
         senderLabel.setTextFill(Color.web("#3E2723"));
         bubble.getChildren().add(senderLabel);
-        
+
         // Détection du type
         String ext = nomFichier.toLowerCase();
         if (ext.endsWith(".png") || ext.endsWith(".jpg") || ext.endsWith(".jpeg") || ext.endsWith(".gif")) {
@@ -742,23 +788,23 @@ public class ChatUI extends Application {
             });
             bubble.getChildren().add(fileLabel);
         }
-        
+
         container.getChildren().add(bubble);
         messagesBox.getChildren().add(container);
-        
+
         scrollPane.layout();
         scrollPane.setVvalue(1.0);
     }
-    
+
     private void afficherFichierEnvoye(java.io.File fichier, String nomFichier) {
         HBox container = new HBox();
         container.setAlignment(Pos.CENTER_RIGHT); // Aligné à DROITE car c'est moi qui envoie
-        
+
         VBox bubble = new VBox(5);
         bubble.setPadding(new Insets(8, 12, 8, 12));
         bubble.setStyle("-fx-background-color: #F4C9D6; -fx-background-radius: 15 15 0 15;"); // Rose comme mes messages
         bubble.setMaxWidth(320);
-        
+
         // Détection du type
         String ext = nomFichier.toLowerCase();
         if (ext.endsWith(".png") || ext.endsWith(".jpg") || ext.endsWith(".jpeg") || ext.endsWith(".gif")) {
@@ -785,10 +831,10 @@ public class ChatUI extends Application {
             });
             bubble.getChildren().add(fileLabel);
         }
-        
+
         container.getChildren().add(bubble);
         messagesBox.getChildren().add(container);
-        
+
         scrollPane.layout();
         scrollPane.setVvalue(1.0);
     }

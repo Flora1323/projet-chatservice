@@ -17,6 +17,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 import java.util.HashMap;
+import java.util.Collection;
 
 import fr.uga.miashs.dciss.chatservice.common.Packet;
 
@@ -94,6 +95,11 @@ public class ServerMsg implements Serializable {
 
 	public UserMsg getUser(int userId) {
 		return users.get(userId);
+	}
+
+	// méthode pour récupérer tous les utilisateurs (pour envoyer des notifications à tous les clients)
+	public Collection<UserMsg> getAllUsers() {
+		return users.values();
 	}
 
 	// Methode utilisée pour savoir quoi faire d'un paquet

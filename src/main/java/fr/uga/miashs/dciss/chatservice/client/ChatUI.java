@@ -283,8 +283,9 @@ public class ChatUI extends Application {
 
         // Action : Exclure
         removeMember.setOnAction(e -> {
+            String gName = client.displayName(gid);
             TextInputDialog dialog = new TextInputDialog();
-            dialog.setHeaderText("Exclure un membre du groupe " + gid);
+            dialog.setHeaderText("Exclure un membre du groupe " + gName);
             dialog.showAndWait().ifPresent(uid -> {
                 try {
                     client.requestRemoveMember(gid, Integer.parseInt(uid.trim()));
@@ -334,13 +335,14 @@ public class ChatUI extends Application {
                     switch (type) {
                         case NOTIF_GROUP_CREATED: {
                             int gid = buf.getInt();
-                            // Lire le nom envoyé par le serveur (ASSURE-TOI QUE LE SERVEUR L'ENVOIE BIEN !)
+                            // Lire le nom envoyé par le serveur
                             int nameLen = buf.getInt();
                             byte[] nameBytes = new byte[nameLen];
                             buf.get(nameBytes);
                             String gName = new String(nameBytes, StandardCharsets.UTF_8);
 
-                            // Maintenant que le getter existe, cette ligne va fonctionner !
+                            // on enregistre le nom du groupe dans la map des pseudos pour l'afficher
+                            // correctement
                             client.getNicknamesMap().put(gid, gName);
 
                             Platform.runLater(() -> {
@@ -357,8 +359,11 @@ public class ChatUI extends Application {
                             buf.get(nameBytes);
                             String gName = new String(nameBytes, StandardCharsets.UTF_8);
 
+                            // On récupère le nom de l'utilisateur ajouté
+                            String uName = client.displayName(uid);
+
                             Platform.runLater(() -> {
-                                addMessage("✓ User " + uid + " ajouté au groupe " + gName, false);
+                                addMessage("✓ " + uName + " ajouté au groupe " + gName, false);
                                 if (uid == client.getIdentifier()) {
                                     client.getNicknamesMap().put(gid, gName);
                                     groupList.getChildren().add(createGroupButton(gid));
@@ -369,8 +374,13 @@ public class ChatUI extends Application {
                         case NOTIF_MEMBER_REMOVED: {
                             int gid = buf.getInt();
                             int uid = buf.getInt();
+
+                            // On transforme les IDs en noms
+                            String uName = client.displayName(uid);
+                            String gName = client.displayName(gid);
+
                             Platform.runLater(() -> {
-                                addMessage("✓ User " + uid + " retiré du groupe " + gid, false);
+                                addMessage("✓ " + uName + " retiré du groupe " + gName, false);
                                 // SI C'EST MOI qui suis retiré (ou qui ai quitté), j'enlève le bouton
                                 if (uid == client.getIdentifier()) {
                                     removeGroupButton(gid);
@@ -380,8 +390,11 @@ public class ChatUI extends Application {
                         }
                         case NOTIF_GROUP_DELETED: {
                             int gid = buf.getInt();
+
+                            String gName = client.displayName(gid); // On récupère le nom du groupe
+
                             Platform.runLater(() -> {
-                                addMessage("✓ Groupe " + gid + " supprimé", false);
+                                addMessage("✓ Le groupe " + gName + " a été supprimé", false);
                                 removeGroupButton(gid); // On enlève le bouton car le groupe n'existe plus
                             });
                             break;
@@ -416,8 +429,10 @@ public class ChatUI extends Application {
                                 String name = new String(nameBytes, StandardCharsets.UTF_8);
                                 client.getNicknamesMap().put(uid, name);
                             }
-                            Platform.runLater(() -> statusLabel.setText("ID : " + client.getIdentifier() + " ("
-                                    + client.displayName(client.getIdentifier()) + ")"));
+                            Platform.runLater(() -> {
+                                String monNom = client.displayName(client.getIdentifier());
+                                statusLabel.setText("Connecté en tant que : " + monNom + " (ID : " + client.getIdentifier() + ")");
+                            });
                             break;
                         }
                         case NOTIF_ERROR: {
@@ -431,25 +446,14 @@ public class ChatUI extends Application {
                         }
                     }
                 } else {
+                    // --- RECEPTION DE MESSAGE NORMAL ---
                     String msg = new String(p.data);
-
-
-
-                    // --- DEBUG ZONE ---
-                    System.out.println("DEBUG NICKNAMES :");
-                    System.out.println("  - Map actuelle : " + client.getNicknamesMap());
-                    System.out.println("  - Recherche ID : " + p.srcId);
-                    System.out.println("  - Résultat displayName : " + client.displayName(p.srcId));
-                    // ------------------
-
-
-                    
                     String sender = client.displayName(p.srcId); // Utilise le pseudo
 
                     if (p.destId < 0) { // Si c'est un message de groupe
                         String groupName = client.displayName(p.destId);
                         // sauvegarde le message reçu
-                        history.saveMessage(p.srcId, p.destId, msg);
+                        // history.saveMessage(p.srcId, p.destId, msg); // SAUVEGARDE DANS LA BDD
                         Platform.runLater(() -> addMessage("[" + groupName + "] " + sender + " : " + msg, false));
                     } else {
                         Platform.runLater(() -> addMessage(sender + " : " + msg, false));
@@ -461,7 +465,7 @@ public class ChatUI extends Application {
             client.addConnectionListener(active -> {
                 Platform.runLater(() -> {
                     if (active) {
-                        statusLabel.setText("ID : " + client.getIdentifier());
+                        statusLabel.setText("Connecté (ID: " + client.getIdentifier() + ")");
                     } else {
                         statusLabel.setText("Déconnecté");
                     }

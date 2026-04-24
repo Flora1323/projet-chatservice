@@ -29,8 +29,8 @@ public class Message {
     // Lire les messages pour un utilisateur ou groupe
  //MÉTHODE MODIFIÉE : On renvoie maintenant une List<String>
     // pour que celui qui appelle la méthode puisse faire ce qu'il veut avec (afficher, sauvegarder dans un fichier, etc.)
-    public static List<String> getMessages(int userId) throws Exception {
-        List<String> resultats = new ArrayList<>();
+    public static List<Archive> getMessages(int userId) throws Exception {
+        List<Archive> resultats = new ArrayList<>();
         try {
             Connection conn = DB.connect();
 
@@ -61,6 +61,43 @@ public class Message {
         return resultats; // On renvoie la liste à celui qui a appelé la méthode
     }
 
+    public static List<Archive> getMessagesSpecifiques(int monId, int destId) {
+        List<Archive> messages = new ArrayList<>();
+        String query;
+        
+        // Si destId < 0, c'est un groupe. Sinon, c'est du privé.
+        if (destId < 0) {
+            query = "SELECT sender_id, content FROM messages WHERE receiver_id = ? ORDER BY timestamp ASC";
+        } else {
+            query = "SELECT sender_id, content FROM messages " +
+                    "WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?) " +
+                    "ORDER BY timestamp ASC";
+        }
+
+        try (Connection conn = DB.connect();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            
+            if (destId < 0) {
+                pstmt.setInt(1, destId);
+            } else {
+                pstmt.setInt(1, monId);
+                pstmt.setInt(2, destId);
+                pstmt.setInt(3, destId);
+                pstmt.setInt(4, monId);
+            }
+            
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+            	int expediteur = rs.getInt("sender_id");
+            	String texte = rs.getString("content");
+
+            	messages.add(new Archive(expediteur, texte));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return messages;
+    }
     // Sauvegarder un fichier (juste le chemin)
     public static void saveFile(int messageId, String path) throws Exception {
         try {

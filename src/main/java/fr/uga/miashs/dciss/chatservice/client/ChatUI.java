@@ -435,7 +435,8 @@ public class ChatUI extends Application {
                     if (active) {
                         statusLabel.setText("ID : " + client.getIdentifier());
                         chargerHistorique(client.getIdentifier()); // Charge l'historique des messages depuis la BDD à la connexion
-                        
+                        Contact.insererContactsDeTest(); // Insère des contacts de test dans la BDD (à faire une seule fois)
+                        afficherListeContacts(); // Affiche la liste des contacts à la connexion
                     } else {
                         statusLabel.setText("Déconnecté");
                     }
@@ -485,8 +486,9 @@ public class ChatUI extends Application {
     
     private void afficherListeContacts() {
         // On récupère la liste BDD
-        List<Contact> contactsBdd = DB.getAllContacts(); // ou Message.getAllContacts()
+        List<Contact> contactsBdd = Contact.getAllContacts(); // ou Message.getAllContacts()
         
+        System.out.println("Nombre de contacts trouvés dans la BDD : " + contactsBdd.size());
         // On tourne sur chaque contact
         for (Contact c : contactsBdd) {
             // On ne crée pas de bouton pour discuter avec soi-même !

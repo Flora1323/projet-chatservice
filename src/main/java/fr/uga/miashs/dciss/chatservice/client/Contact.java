@@ -1,6 +1,8 @@
 package fr.uga.miashs.dciss.chatservice.client;
 
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Contact {
 	private int id;
@@ -55,4 +57,78 @@ public class Contact {
             e.printStackTrace();
         }
     }
+    
+    public static List<Contact> getAllContacts() {
+        List<Contact> liste = new ArrayList<>();
+        // Adapte le nom de la table et des colonnes selon ce que tu as créé ce matin
+        String query = "SELECT id, nickname FROM contacts"; 
+        
+        try (Connection conn = DB.connect();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+             
+            while (rs.next()) {
+                liste.add(new Contact(rs.getInt("id"), rs.getString("nickname")));
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur chargement contacts : " + e.getMessage());
+        }
+        return liste;
+    }
+ // ####################################
+    // METHODE TEMPORAIRE POUR TESTER L'INTERFACE
+    // ####################################
+    public static void insererContactsDeTest() {
+    	
+    	String createTable = "CREATE TABLE IF NOT EXISTS contacts (id INTEGER PRIMARY KEY, nickname TEXT)";
+    	
+        String query = "INSERT OR IGNORE INTO contacts (id, nickname) VALUES (?, ?)";
+        
+        try (Connection conn = DB.connect();
+        	java.sql.Statement stmt = conn.createStatement();
+        	
+            java.sql.PreparedStatement pstmt = conn.prepareStatement(query)) {
+             
+        	stmt.execute(createTable);
+        	
+            // On ajoute l'ID 1
+            pstmt.setInt(1, 1);
+            pstmt.setString(2, "Mimi");
+            pstmt.executeUpdate();
+            
+            // On ajoute l'ID 2
+            pstmt.setInt(1, 2);
+            pstmt.setString(2, "Slayyyy");
+            pstmt.executeUpdate();
+
+            // On ajoute l'ID 3
+            pstmt.setInt(1, 3);
+            pstmt.setString(2, "Queen");
+            pstmt.executeUpdate();
+            
+            System.out.println("Faux contacts injectés avec succès !");
+            
+        } catch (Exception e) {
+            System.out.println("Erreur d'injection : " + e.getMessage());
+        }
+    }
+        
+     // ####################################
+        // SAUVEGARDER OU METTRE À JOUR UN CONTACT
+        // ####################################
+        public static void sauvegarderContact(int id, String nickname) {
+            String sql = "INSERT OR REPLACE INTO contacts (id, nickname) VALUES (?, ?)";
+            
+            try (Connection conn = DB.connect();
+                 java.sql.PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                 
+                pstmt.setInt(1, id);
+                pstmt.setString(2, nickname);
+                pstmt.executeUpdate();
+                
+            } catch (Exception e) {
+                System.out.println("Erreur de sauvegarde du contact : " + e.getMessage());
+            }
+        }  
+    
 }

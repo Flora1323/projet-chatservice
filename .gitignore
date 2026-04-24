@@ -3,6 +3,7 @@ target/
 *.class
 *.jar
 *.war
+*.db
 
 # IDE files
 .idea/
@@ -29,3 +30,4 @@ derby.log
 sample/
 server-state.ser
 client-*.db/
+/bin/

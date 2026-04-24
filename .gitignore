@@ -3,6 +3,7 @@ target/
 *.class
 *.jar
 *.war
+*.db
 
 # IDE files
 .idea/
@@ -15,6 +16,11 @@ target/
 # OS files
 Thumbs.db
 .DS_Store
+.classpath 
+
+# Fichiers générés par les tests
+fichiers_recus/
+server_state.ser
 
 # Logs
 *.log

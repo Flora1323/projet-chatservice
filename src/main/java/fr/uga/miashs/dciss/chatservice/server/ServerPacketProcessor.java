@@ -55,7 +55,7 @@ public class ServerPacketProcessor implements PacketProcessor {
 			case LEAVE_GROUP:
 				leaveGroup(p.srcId, buf);
 				break;
-			
+
 			case SET_NICKNAME:
 				setNickname(p.srcId, buf);
 				break;
@@ -72,8 +72,17 @@ public class ServerPacketProcessor implements PacketProcessor {
 	}
 
 	private void createGroup(int ownerId, ByteBuffer data) {
+		// Lire le nom du groupe
+		int nameLen = data.getInt();
+		byte[] nameBytes = new byte[nameLen];
+		data.get(nameBytes);
+		String groupName = new String(nameBytes, java.nio.charset.StandardCharsets.UTF_8);
+
+		// Lire les membres
 		int nb = data.getInt();
 		GroupMsg g = server.createGroup(ownerId);
+		g.setName(groupName); // il faudra ajouter setName dans GroupMsg
+
 		for (int i = 0; i < nb; i++) {
 			int memberId = data.getInt();
 			UserMsg u = server.getUser(memberId);
@@ -82,9 +91,11 @@ public class ServerPacketProcessor implements PacketProcessor {
 				continue;
 			}
 			g.addMember(u);
+			System.out.println("Notification MEMBER_ADDED envoyée à tous pour membre " + memberId);
+			notifyMemberAdded(g, memberId);
 		}
-		LOG.info("Group " + g.getId() + " creé par" + ownerId);
-		notifyGroupCreated(ownerId, g.getId());
+		LOG.info("Group " + g.getId() + " creé par " + ownerId + " avec nom : " + groupName);
+		notifyGroupCreated(ownerId, g.getId(), groupName);
 	}
 
 	private void deleteGroup(int srcId, ByteBuffer buf) {
@@ -225,7 +236,7 @@ public class ServerPacketProcessor implements PacketProcessor {
 		buf.putInt(nameBytes.length);
 		buf.put(nameBytes);
 		byte[] data = buf.array();
-		
+
 		// 通知自己 + 同群的人（去重）
 		java.util.Set<Integer> done = new java.util.HashSet<>();
 		done.add(u.getId());
@@ -255,18 +266,25 @@ public class ServerPacketProcessor implements PacketProcessor {
 		}
 	}
 
-	private void notifyGroupCreated(int ownerId, int groupId) {
-		ByteBuffer buf = ByteBuffer.allocate(1 + 4);
+	private void notifyGroupCreated(int ownerId, int groupId, String groupName) {
+		byte[] nameBytes = groupName.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+		ByteBuffer buf = ByteBuffer.allocate(1 + 4 + 4 + nameBytes.length);
 		buf.put(NOTIF_GROUP_CREATED);
 		buf.putInt(groupId);
+		buf.putInt(nameBytes.length);
+		buf.put(nameBytes);
 		sendNotification(ownerId, buf.array());
 	}
 
 	private void notifyMemberAdded(GroupMsg g, int addedUserId) {
-		ByteBuffer buf = ByteBuffer.allocate(1 + 4 + 4);
+		byte[] nameBytes = g.getName() != null ? g.getName().getBytes(java.nio.charset.StandardCharsets.UTF_8)
+				: new byte[0];
+		ByteBuffer buf = ByteBuffer.allocate(1 + 4 + 4 + 4 + nameBytes.length);
 		buf.put(NOTIF_MEMBER_ADDED);
 		buf.putInt(g.getId());
 		buf.putInt(addedUserId);
+		buf.putInt(nameBytes.length);
+		buf.put(nameBytes);
 		broadcastNotification(g, buf.array());
 	}
 

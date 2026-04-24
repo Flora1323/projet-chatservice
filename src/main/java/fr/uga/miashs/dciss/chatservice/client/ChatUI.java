@@ -187,7 +187,7 @@ public class ChatUI extends Application {
         inputField.setStyle("-fx-background-radius: 20; -fx-padding: 8 15 8 15;"); // arrondit les bords et ajoute du
                                                                                    // padding
         HBox.setHgrow(inputField, Priority.ALWAYS); // prend tout l'espace disponible
-
+        
         // Bouton envoyer
         Button sendButton = new Button("➤");
         sendButton.setStyle(
@@ -197,7 +197,7 @@ public class ChatUI extends Application {
         // taille de police
         // 16, padding
 
-        bottomBar.getChildren().addAll(inputField, sendButton); // on ajoute le champ et le bouton à la barre du bas
+        bottomBar.getChildren().addAll(inputField, fileButton, sendButton); // on ajoute le champ et le bouton à la barre du bas
         root.setBottom(bottomBar); // on met la barre en bas
 
         // ####################################
@@ -225,7 +225,8 @@ public class ChatUI extends Application {
                 System.out.println("ID invalide");
             }
         });
-
+      
+        
         // Envoyer aussi avec la touche Entrée
         inputField.setOnAction(e -> {
             String msg = inputField.getText().trim();
@@ -319,6 +320,11 @@ public class ChatUI extends Application {
 
             // quand on reçoit un message, on l'affiche à gauche
             client.addMessageListener(p -> {
+            	// Si c'est un fichier (byte 2)
+            	if (p.data != null && p.data.length > 0 && p.data[0] == 2) {
+            	    recevoirFichierUI(p);
+            	    return;
+            	}
                 if (p.srcId == 0 && p.data != null && p.data.length >= 1) {
                     ByteBuffer buf = ByteBuffer.wrap(p.data);
                     byte type = buf.get();
@@ -390,7 +396,7 @@ public class ChatUI extends Application {
                                                                                                                          // notification
                                                                                                                          // de
                                                                                                                          // changement
-                                                                                                                         // de
+                                                                                                                        // de
                                                                                                                          // pseudo
                             break;
                         }
@@ -476,6 +482,128 @@ public class ChatUI extends Application {
 
         // On retire de la VBox groupList tout composant qui correspond à cet ID
         groupList.getChildren().removeIf(node -> targetId.equals(node.getId()));
+    } 
+    
+    private void recevoirFichierUI(fr.uga.miashs.dciss.chatservice.common.Packet p) {
+        try {
+            java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(p.data);
+            java.io.DataInputStream dis = new java.io.DataInputStream(bis);
+            
+            byte type = dis.readByte();                       // lis le type
+            int tailleNom = dis.readInt();                    // lis la taille du nom
+            
+            byte[] nameBytes = new byte[tailleNom];
+            dis.readFully(nameBytes);
+            String nomFichier = new String(nameBytes);
+            
+            int tailleFichier = dis.readInt();
+            byte[] fileBytes = new byte[tailleFichier];
+            dis.readFully(fileBytes);
+            
+            // Sauvegarder le fichier
+            java.io.File dossier = new java.io.File("fichiers_recus");
+            if (!dossier.exists()) dossier.mkdirs();
+            java.io.File fichierRecu = new java.io.File(dossier, nomFichier);
+            java.nio.file.Files.write(fichierRecu.toPath(), fileBytes);
+            
+            // Afficher dans l'interface selon le type
+            String sender = client.displayName(p.srcId);
+            Platform.runLater(() -> afficherFichier(fichierRecu, nomFichier, sender));
+            
+        } catch (java.io.IOException e) {
+            e.printStackTrace();
+        }
+    }
+    private void afficherFichier(java.io.File fichier, String nomFichier, String sender) {
+        HBox container = new HBox();
+        container.setAlignment(Pos.CENTER_LEFT);
+        
+        VBox bubble = new VBox(5);
+        bubble.setPadding(new Insets(8, 12, 8, 12));
+        bubble.setStyle("-fx-background-color: white; -fx-background-radius: 15 15 15 0;");
+        bubble.setMaxWidth(320);
+        
+        // Nom de l'expéditeur
+        Label senderLabel = new Label(sender);
+        senderLabel.setFont(Font.font("Arial", FontWeight.BOLD, 11));
+        senderLabel.setTextFill(Color.web("#3E2723"));
+        bubble.getChildren().add(senderLabel);
+        
+        // Détection du type
+        String ext = nomFichier.toLowerCase();
+        if (ext.endsWith(".png") || ext.endsWith(".jpg") || ext.endsWith(".jpeg") || ext.endsWith(".gif")) {
+            // C'est une image ou un GIF - afficher directement
+            try {
+                javafx.scene.image.Image image = new javafx.scene.image.Image(fichier.toURI().toString());
+                javafx.scene.image.ImageView imageView = new javafx.scene.image.ImageView(image);
+                imageView.setFitWidth(300);
+                imageView.setPreserveRatio(true);
+                bubble.getChildren().add(imageView);
+            } catch (Exception e) {
+                bubble.getChildren().add(new Label("📎 " + nomFichier));
+            }
+        } else {
+            // Autre type de fichier - afficher comme lien
+            Label fileLabel = new Label("📎 " + nomFichier);
+            fileLabel.setStyle("-fx-text-fill: #3E2723; -fx-underline: true; -fx-cursor: hand;");
+            fileLabel.setOnMouseClicked(e -> {
+                try {
+                    java.awt.Desktop.getDesktop().open(fichier);
+                } catch (Exception ex) {
+                    System.out.println("Impossible d'ouvrir le fichier");
+                }
+            });
+            bubble.getChildren().add(fileLabel);
+        }
+        
+        container.getChildren().add(bubble);
+        messagesBox.getChildren().add(container);
+        
+        scrollPane.layout();
+        scrollPane.setVvalue(1.0);
+    }
+    
+    private void afficherFichierEnvoye(java.io.File fichier, String nomFichier) {
+        HBox container = new HBox();
+        container.setAlignment(Pos.CENTER_RIGHT); // Aligné à DROITE car c'est moi qui envoie
+        
+        VBox bubble = new VBox(5);
+        bubble.setPadding(new Insets(8, 12, 8, 12));
+        bubble.setStyle("-fx-background-color: #F4C9D6; -fx-background-radius: 15 15 0 15;"); // Rose comme mes messages
+        bubble.setMaxWidth(320);
+        
+        // Détection du type
+        String ext = nomFichier.toLowerCase();
+        if (ext.endsWith(".png") || ext.endsWith(".jpg") || ext.endsWith(".jpeg") || ext.endsWith(".gif")) {
+            // C'est une image ou un GIF - afficher directement
+            try {
+                javafx.scene.image.Image image = new javafx.scene.image.Image(fichier.toURI().toString());
+                javafx.scene.image.ImageView imageView = new javafx.scene.image.ImageView(image);
+                imageView.setFitWidth(300);
+                imageView.setPreserveRatio(true);
+                bubble.getChildren().add(imageView);
+            } catch (Exception e) {
+                bubble.getChildren().add(new Label("📎 " + nomFichier));
+            }
+        } else {
+            // Autre type de fichier - afficher comme lien
+            Label fileLabel = new Label("📎 " + nomFichier);
+            fileLabel.setStyle("-fx-text-fill: #3E2723; -fx-underline: true; -fx-cursor: hand;");
+            fileLabel.setOnMouseClicked(e -> {
+                try {
+                    java.awt.Desktop.getDesktop().open(fichier);
+                } catch (Exception ex) {
+                    System.out.println("Impossible d'ouvrir le fichier");
+                }
+            });
+            bubble.getChildren().add(fileLabel);
+        }
+        
+        container.getChildren().add(bubble);
+        messagesBox.getChildren().add(container);
+        
+        scrollPane.layout();
+        scrollPane.setVvalue(1.0);
     }
 
     public static void main(String[] args) {

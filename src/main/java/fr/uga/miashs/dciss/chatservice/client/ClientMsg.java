@@ -165,127 +165,71 @@ public class ClientMsg {
 		notifyConnectionListeners(false);
 	}
 
-	//fichiers 
-	public void envoyerFichier(int destId, File file) {
-		try {
-			   //Lire le fichier en bytes
-			    byte[] fileBytes = Files.readAllBytes(file.toPath());
-		        byte[] nameBytes = file.getName().getBytes();
-
-
-		        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-		        DataOutputStream dos = new DataOutputStream(bos);
-
-		        //ecrire selon le protocole : type + taille nom + nom + taille fichier + contenu
-		        dos.writeByte(2);       // type = ?
-		        dos.writeInt(nameBytes.length);        // taille du nom
-		        dos.write(nameBytes);           // le nom
-		        dos.writeInt(fileBytes.length);        // taille du fichier
-		        dos.write(fileBytes);           // le contenu
-		        dos.flush( );
-
-		        //Envoyer via sendPacket
-		        sendPacket(destId, bos.toByteArray());
-
-		    } catch (IOException e) {
-		        e.printStackTrace();
-		    }
-		}
-
-
-	public void recevoirFichier(Packet p) {
-	    try {
-	        //réparper les outils pour LIRE les bytes du paquet
-	        ByteArrayInputStream bis = new ByteArrayInputStream(p.data);
-	        DataInputStream dis = new DataInputStream(bis);
-
-	        // Lire dans le même ordre qu'à l'envoi
-	        byte type = dis.readByte() ;              // lis le type
-	        int tailleNom = dis.readInt();          // lis la taille du nom
-
-	        // creer un tableau vide de la bonne taille, puis le remplir
-	        byte[] nameBytes = new byte[tailleNom];
-	        dis.readFully(nameBytes);
-	        String nomFichier = new String(nameBytes);
-
-	        int tailleFichier = dis.readInt();      // lis la taille du fichier
-	        byte[] fileBytes = new byte[tailleFichier];
-	        dis.readFully(fileBytes);
-
-	        // sauvegarder le fichier sur le disque
-	        File dossier = new File("fichiers_recus");
-	        if (!dossier.exists()) dossier.mkdirs();
-
-	        File fichierRecu = new File(dossier, nomFichier);
-	        Files.write(fichierRecu.toPath(), fileBytes);
-
-	        System.out.println("Fichier reçu : " + nomFichier + " de la part de " + p.srcId);
-
-	    } catch (IOException e) {
-	        e.printStackTrace();
-	    }
-	}
-
-	// --- Gestion des Groupes ---
-	//客户端向服务器发送一个“创建群组”的请求
-	public void requestCreateGroup(int[] memberIds) throws IOException{
+	// 客户端向服务器发送一个“创建群组”的请求
+	public void requestCreateGroup(String groupName, int[] memberIds) throws IOException {
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
-		//在内存里准备一个字节缓冲区，把你要发送的数据先装进去
+		// 在内存里准备一个字节缓冲区，把你要发送的数据先装进去
 		DataOutputStream dos = new DataOutputStream(bos);
-		//方便按类型往 bos 里写数据，比如写 byte、写 int
+		// 方便按类型往 bos 里写数据，比如写 byte、写 int
 
-		dos.writeByte(CREATE_GROUP);//命令的 type
-		dos.writeInt(memberIds.length);//成员数量
-		for (int id: memberIds) {
+		dos.writeByte(CREATE_GROUP);// 命令的 type
+		// On envoie d'abord le nom du groupe
+		byte[] nameBytes = groupName.getBytes(StandardCharsets.UTF_8);
+		dos.writeInt(nameBytes.length);
+		dos.write(nameBytes);
+
+		// Puis la liste des membres
+		dos.writeInt(memberIds.length);
+		for (int id : memberIds) {
 			dos.writeInt(id);
 		}
-		//[type=1][nb=2][1][3]
+		// [type=1][nb=2][1][3]
 
-		dos.flush();//把 DataOutputStream 里还没真正写进 bos 的内容全部推过去
-		sendPacket(0,bos.toByteArray());
-		//bos.toByteArray()把前面写进去的所有数据取出来，变成一个byte[] 就是最后的data
-		//0 表示发给server
+		dos.flush();// 把 DataOutputStream 里还没真正写进 bos 的内容全部推过去
+		sendPacket(0, bos.toByteArray());
+		// bos.toByteArray()把前面写进去的所有数据取出来，变成一个byte[] 就是最后的data
+		// 0 表示发给server
 	}
 
-	public void requestDeleteGroup(int groupId) throws IOException{
+	public void requestDeleteGroup(int groupId) throws IOException {
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
 		DataOutputStream dos = new DataOutputStream(bos);
 		dos.writeByte(SUPPRIME_GROUP);
 		dos.writeInt(groupId);
 		dos.flush();
-		sendPacket(0,bos.toByteArray());
+		sendPacket(0, bos.toByteArray());
 	}
 
-	public void requestAddMember(int groupId, int userId) throws IOException{
+	public void requestAddMember(int groupId, int userId) throws IOException {
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
 		DataOutputStream dos = new DataOutputStream(bos);
 		dos.writeByte(AJOUT_MEMBRE);
 		dos.writeInt(groupId);
 		dos.writeInt(userId);
 		dos.flush();
-		sendPacket(0,bos.toByteArray());
+		sendPacket(0, bos.toByteArray());
 	}
 
-	public void requestRemoveMember(int groupId, int userId) throws IOException{
+	public void requestRemoveMember(int groupId, int userId) throws IOException {
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
 		DataOutputStream dos = new DataOutputStream(bos);
 		dos.writeByte(SUPPRIME_MEMBRE);
 		dos.writeInt(groupId);
 		dos.writeInt(userId);
 		dos.flush();
-		sendPacket(0,bos.toByteArray());
+		sendPacket(0, bos.toByteArray());
 	}
 
-	public void requestLeaveGroup(int groupId) throws IOException{
+	public void requestLeaveGroup(int groupId) throws IOException {
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
 		DataOutputStream dos = new DataOutputStream(bos);
 		dos.writeByte(LEAVE_GROUP);
 		dos.writeInt(groupId);
 		dos.flush();
-		sendPacket(0,bos.toByteArray());
+		sendPacket(0, bos.toByteArray());
 	}
 
-	public void requestSetNickname(String nickname) throws IOException{
+	public void requestSetNickname(String nickname) throws IOException {
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();
 		DataOutputStream dos = new DataOutputStream(bos);
 		byte[] nameBytes = nickname.getBytes(StandardCharsets.UTF_8);
@@ -293,13 +237,16 @@ public class ClientMsg {
 		dos.writeInt(nameBytes.length);
 		dos.write(nameBytes);
 		dos.flush();
-		sendPacket(0,bos.toByteArray());
+		sendPacket(0, bos.toByteArray());
 	}
 
 	public String displayName(int id) {
 		return nicknames.getOrDefault(id, "User" + id);
 	}
-
+	
+	public Map<Integer, String> getNicknamesMap() {
+		return nicknames;
+	}
 
 	public static void main(String[] args) throws UnknownHostException, IOException, InterruptedException {
 
@@ -439,6 +386,7 @@ public class ClientMsg {
 						case "/add": {
 							// /add -1 5,6 ajoute pluseirus/une seul personne dans le groupe -1
 							int gid = Integer.parseInt(parts[1]);
+							// int uid = Integer.parseInt(parts[2]); suelment un ajout possible
 							String[] uids = parts[2].split(",");
 							for (String uidSr : uids) {
 								int uid = Integer.parseInt(uidSr.trim());
@@ -458,9 +406,15 @@ public class ClientMsg {
 						}
 
 						case "/leave": {
+							// leave -1
 							int gid = Integer.parseInt(parts[1]);
 							c.requestLeaveGroup(gid);
 							System.out.println("Demande: quitter le groupe " + gid + " envoyée");
+							break;
+						}
+
+						case "/quit": {
+							lu = "\\quit";
 							break;
 						}
 
@@ -471,7 +425,8 @@ public class ClientMsg {
 							}
 							StringBuilder sb = new StringBuilder();
 							for (int i = 1; i < parts.length; i++) {
-								if (i > 1) sb.append(" ");
+								if (i > 1)
+									sb.append(" ");
 								sb.append(parts[i]);
 							}
 							c.requestSetNickname(sb.toString());
@@ -535,9 +490,23 @@ public class ClientMsg {
 			} catch (Exception e) {
 				System.out.println("Mauvais format: " + e.getMessage());
 			}
+
+			/*
+			 * while (!"\\quit".equals(lu)) {
+			 * try {
+			 * System.out.println("A qui voulez vous écrire ? ");
+			 * int dest = Integer.parseInt(sc.nextLine());
+			 * 
+			 * System.out.println("Votre message ? ");
+			 * lu = sc.nextLine();
+			 * c.sendPacket(dest, lu.getBytes());
+			 * } catch (InputMismatchException | NumberFormatException e) {
+			 * System.out.println("Mauvais format");
+			 * }
+			 */
+
 		}
 
 		c.closeSession();
 	}
-} 
-	            
+}

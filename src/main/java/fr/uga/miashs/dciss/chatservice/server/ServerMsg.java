@@ -16,6 +16,7 @@ import java.net.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
+import java.util.HashMap;
 
 import fr.uga.miashs.dciss.chatservice.common.Packet;
 
@@ -26,27 +27,31 @@ public class ServerMsg implements Serializable {
 														// de l'état du serveur
 
 	private final static Logger LOG = Logger.getLogger(ServerMsg.class.getName());
-	/* LOG.info("Server started");
-	LOG.warning("Unknown client id");
-	LOG.severe("Socket error");*/
-	public final static int SERVER_CLIENTID = 0;//服务器的 id 永远是 0
+	/*
+	 * LOG.info("Server started");
+	 * LOG.warning("Unknown client id");
+	 * LOG.severe("Socket error");
+	 */
+	public final static int SERVER_CLIENTID = 0;// 服务器的 id 永远是 0
 
-	private transient ServerSocket serverSock;//ServerSocket是服务器端用来监听客户端连接的 socket。
-	//Socket client = serverSock.accept();接收一个客户端连接。
-	private transient boolean started;//服务器是否启动
-	private transient ExecutorService executor;//Java 并发编程里用来管理线程的接口
-	private transient ServerPacketProcessor sp;//负责处理收到的 Packet
-	
+	private transient ServerSocket serverSock;// ServerSocket是服务器端用来监听客户端连接的 socket。
+	// Socket client = serverSock.accept();接收一个客户端连接。
+	private transient boolean started;// 服务器是否启动
+	private transient ExecutorService executor;// Java 并发编程里用来管理线程的接口
+	private transient ServerPacketProcessor sp;// 负责处理收到的 Packet
+
 	// maps pour associer les id aux users et groupes
 	private Map<Integer, UserMsg> users;
 	private Map<Integer, GroupMsg> groups;
 
 	// séquences pour générer les identifiant d'utilisateurs et de groupe
 	private AtomicInteger nextUserId;
-	/*那第一个新用户连接时，服务器分配：userId = 1 
-	然后它自动变成：nextUserId = 2
-	再来一个新用户： userId = 2*/
-	//AtomicInteger是一个线程安全的整数
+	/*
+	 * 那第一个新用户连接时，服务器分配：userId = 1
+	 * 然后它自动变成：nextUserId = 2
+	 * 再来一个新用户： userId = 2
+	 */
+	// AtomicInteger是一个线程安全的整数
 	private AtomicInteger nextGroupId;
 
 	public ServerMsg(int port) throws IOException {
@@ -138,7 +143,7 @@ public class ServerMsg implements Serializable {
 				// une pour envoyer des messages au client
 				// les deux boucles sont gérées au niveau de la classe UserMsg
 				UserMsg x = users.get(userId);
-				if (x!= null && x.open(s)) {
+				if (x != null && x.open(s)) {
 					LOG.info(userId + " connected");
 					// lancement boucle de reception
 					executor.submit(() -> x.receiveLoop());
@@ -169,7 +174,7 @@ public class ServerMsg implements Serializable {
 	public GroupMsg getGroup(int id) {
 		return groups.get(id);
 	}
-	
+
 	public void save(String filePath) {
 		try (ObjectOutputStream oos = new ObjectOutputStream(
 				new FileOutputStream(filePath))) {
@@ -201,6 +206,14 @@ public class ServerMsg implements Serializable {
 		} catch (IOException | ClassNotFoundException e) {
 			LOG.warning("Erreur chargement : " + e.getMessage());
 		}
+	}
+
+	public Map<Integer, String> getAllNicknames() {
+		Map<Integer, String> result = new HashMap<>();
+		for (Map.Entry<Integer, UserMsg> entry : users.entrySet()) {
+			result.put(entry.getKey(), entry.getValue().getNickname());
+		}
+		return result;
 	}
 
 	public static void main(String[] args) throws IOException {

@@ -16,6 +16,11 @@ public class InitDB {
         stmt.execute("CREATE TABLE IF NOT EXISTS groups (" +
                 "id INTEGER PRIMARY KEY, " +
                 "name TEXT);");
+        
+        stmt.execute("CREATE TABLE IF NOT EXISTS group_members (" +
+                "group_id INTEGER, " +
+                "user_id INTEGER, " +
+                "PRIMARY KEY(group_id, user_id));");
 
         // messages
         stmt.execute("CREATE TABLE IF NOT EXISTS messages (" +

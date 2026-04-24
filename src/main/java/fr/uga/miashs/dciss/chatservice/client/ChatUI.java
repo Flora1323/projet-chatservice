@@ -16,6 +16,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
+
 
 import static fr.uga.miashs.dciss.chatservice.common.MessageType.*;
 
@@ -422,6 +424,8 @@ public class ChatUI extends Application {
                 Platform.runLater(() -> {
                     if (active) {
                         statusLabel.setText("ID : " + client.getIdentifier());
+                        chargerHistorique(client.getIdentifier()); // Charge l'historique des messages depuis la BDD à la connexion
+                        
                     } else {
                         statusLabel.setText("Déconnecté");
                     }
@@ -464,6 +468,59 @@ public class ChatUI extends Application {
         // scroll automatique vers le bas
         scrollPane.layout();
         scrollPane.setVvalue(1.0);
+    }
+    
+    // #############################
+    // Affichage de l'historique
+    // ####################################
+    private void addHistoryMessage(String text, boolean isMine) {
+        HBox container = new HBox(); 
+        Label bubble = new Label(text); 
+        bubble.setWrapText(true); 
+        bubble.setMaxWidth(320); 
+        bubble.setPadding(new Insets(8, 12, 8, 12)); 
+        bubble.setFont(Font.font("Arial", 13)); 
+
+        if (isMine) {
+            // Gris pour tes anciens messages (à droite)
+            bubble.setStyle("-fx-background-color: #D3D3D3; -fx-background-radius: 15 15 0 15;");
+            container.setAlignment(Pos.CENTER_RIGHT); 
+        } else {
+            // Gris plus clair pour les anciens messages des autres (à gauche)
+            bubble.setStyle("-fx-background-color: #EBEBEB; -fx-background-radius: 15 15 15 0;");
+            container.setAlignment(Pos.CENTER_LEFT); 
+        }
+
+        container.getChildren().add(bubble); 
+        messagesBox.getChildren().add(container); 
+        scrollPane.layout();
+        scrollPane.setVvalue(1.0);
+    } 
+    
+    private void chargerHistorique(int monId) {
+        try {
+            // 1. On récupère les objets bruts
+            List<Archive> archives = Message.getMessages(monId); // (Ou getMessagesSpecifiques)
+            
+            for (Archive arc : archives) {
+                // 2. Est-ce que c'est MOI l'expéditeur ?
+                boolean isMine = (arc.senderId == monId);
+                
+                // 3. On cherche le pseudo grâce au travail de ton amie !
+                String pseudo;
+                if (isMine) {
+                    pseudo = "Moi";
+                } else {
+                    // Cherche le pseudo dans la map, s'il n'existe pas, affiche "ID X"
+                    pseudo = client.getNicknamesMap().getOrDefault(arc.senderId, "ID " + arc.senderId);
+                }
+                
+                // 4. On dessine la bulle grise !
+                addHistoryMessage("🕰️ " + pseudo + " : " + arc.content, isMine); 
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur lors du chargement de l'historique : " + e.getMessage());
+        }
     }
 
     // #############################

@@ -17,12 +17,23 @@ import java.util.concurrent.ConcurrentSkipListSet;
 
 import fr.uga.miashs.dciss.chatservice.common.Packet;
 
-public class GroupMsg implements PacketProcessor,  Serializable {
-	private static final long serialVersionUID = 1L; // implementation de Serializable pour permettre la sérialisation de l'état du serveur
+public class GroupMsg implements PacketProcessor, Serializable {
+	private static final long serialVersionUID = 1L; // implementation de Serializable pour permettre la sérialisation
+														// de l'état du serveur
 
 	private int groupId;
 	private UserMsg owner;
 	private Set<UserMsg> members;
+
+	private String name;
+
+	public String getName() {
+		return name;
+	}
+
+	public void setName(String name) {
+		this.name = name;
+	}
 
 	public GroupMsg(int groupId, UserMsg owner) {
 		if (groupId > -1)
@@ -69,7 +80,6 @@ public class GroupMsg implements PacketProcessor,  Serializable {
 		return false;
 	}
 
-
 	@Override
 	public void process(Packet p) {
 		// send packet to members except the sender.
@@ -90,7 +100,7 @@ public class GroupMsg implements PacketProcessor,  Serializable {
 		members.forEach(m -> m.getGroups().remove(this));
 	}
 
-	/*Verifier le message vient de l'owner ou non */
+	/* Verifier le message vient de l'owner ou non */
 	public UserMsg getOwner() {
 		return owner;
 	}

@@ -14,6 +14,7 @@ package fr.uga.miashs.dciss.chatservice.client;
 import java.io.*;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.nio.file.Files;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -44,16 +45,11 @@ public class ClientMsg {
 
 	private List<MessageListener> mListeners;
 	private List<ConnectionListener> cListeners;
+
+	private LocalHistoryManager history = new LocalHistoryManager();
 	private final Map<Integer, String> nicknames = new ConcurrentHashMap<>();
 
-	/**
-	 * Create a client with an existing id, that will connect to the server at the
-	 * given address and port
-	 * 
-	 * @param id      The client id
-	 * @param address The server address or hostname
-	 * @param port    The port number
-	 */
+
 	public ClientMsg(int id, String address, int port) {
 		if (id < 0)
 			throw new IllegalArgumentException("id must not be less than 0");
@@ -66,23 +62,10 @@ public class ClientMsg {
 		cListeners = new ArrayList<>();
 	}
 
-	/**
-	 * Create a client without id, the server will provide an id during the the
-	 * session start
-	 * 
-	 * @param address The server address or hostname
-	 * @param port    The port number
-	 */
 	public ClientMsg(String address, int port) {
 		this(0, address, port);
 	}
 
-	/**
-	 * Register a MessageListener to the client. It will be notified each time a
-	 * message is received.
-	 * 
-	 * @param l
-	 */
 	public void addMessageListener(MessageListener l) {
 		if (l != null)
 			mListeners.add(l);
@@ -92,12 +75,6 @@ public class ClientMsg {
 		mListeners.forEach(x -> x.messageReceived(p));
 	}
 
-	/**
-	 * Register a ConnectionListener to the client. It will be notified if the
-	 * connection start or ends.
-	 * 
-	 * @param l
-	 */
 	public void addConnectionListener(ConnectionListener l) {
 		if (l != null)
 			cListeners.add(l);
@@ -111,12 +88,6 @@ public class ClientMsg {
 		return identifier;
 	}
 
-	/**
-	 * Method to be called to establish the connection.
-	 * 
-	 * @throws UnknownHostException
-	 * @throws IOException
-	 */
 	public void startSession() throws UnknownHostException {
 		if (s == null || s.isClosed()) {
 			try {
@@ -139,12 +110,6 @@ public class ClientMsg {
 		}
 	}
 
-	/**
-	 * Send a packet to the specified destination (etiher a userId or groupId)
-	 * 
-	 * @param destId the destinatiion id
-	 * @param data   the data to be sent
-	 */
 	public void sendPacket(int destId, byte[] data) {
 		try {
 			synchronized (dos) {
@@ -157,7 +122,6 @@ public class ClientMsg {
 			// error, connection closed
 			closeSession();
 		}
-
 	}
 
 	/**
@@ -166,19 +130,29 @@ public class ClientMsg {
 	private void receiveLoop() {
 		try {
 			while (s != null && !s.isClosed()) {
-
 				int sender = dis.readInt();
 				int dest = dis.readInt();
 				int length = dis.readInt();
 				byte[] data = new byte[length];
 				dis.readFully(data);
+
+				// ---interception pour la BDD ---
+				// pour transformer les octets en string
+				String texteRecu = new String(data, StandardCharsets.UTF_8);
+
+				//on envoie le message dans la classe sauvegarde (de LocalHistoryManager) 
+				if (history != null && sender != 0) { // on n'enregistre pas les notifications du serveur (sender=0)
+					history.saveMessage(sender, dest, texteRecu);
+				}
+
 				notifyMessageListeners(new Packet(sender, dest, data));
 
 			}
 		} catch (IOException e) {
 			// error, connection closed
+			closeSession();
 		}
-		closeSession();
+
 	}
 
 	public void closeSession() {
@@ -275,7 +249,6 @@ public class ClientMsg {
 	}
 
 	public static void main(String[] args) throws UnknownHostException, IOException, InterruptedException {
-		// ClientMsg c = new ClientMsg("localhost", 1666);
 
 		// MISE EN PLACE D'UN SERVEUR POUR TESTER LE CLIENT
 		String host = args.length > 0 ? args[0] : "localhost";
@@ -285,6 +258,12 @@ public class ClientMsg {
 
 		// add a dummy listener that print the content of message as a string
 		c.addMessageListener(p -> {
+
+			// Si c'est un fichier (byte 2), on n'affiche PAS comme du texte
+			if (p.data[0] == 2) {
+				return; // Le listener fichier s'en occupe
+			}
+
 			// 如果 srcId == 0 -> 这是服务器发来的通知(Actions serveur -> client)
 			if (p.srcId == 0 && p.data != null && p.data.length >= 1) {
 				ByteBuffer buf = ByteBuffer.wrap(p.data);
@@ -292,34 +271,33 @@ public class ClientMsg {
 				switch (type) {
 					case NOTIF_GROUP_CREATED: {
 						int gid = buf.getInt();
-						System.out.println("✓ Groupe " + gid + " créé avec succès");
+						System.out.println("Groupe " + gid + " créé avec succès");
 						break;
 					}
 					case NOTIF_MEMBER_ADDED: {
 						int gid = buf.getInt();
 						int uid = buf.getInt();
-						System.out.println("✓ User " + uid + " ajouté au groupe " + gid);
+						System.out.println("User " + uid + " ajouté au groupe " + gid);
 						break;
 					}
 					case NOTIF_MEMBER_REMOVED: {
 						int gid = buf.getInt();
 						int uid = buf.getInt();
-						System.out.println("✓ User " + uid + " retiré du groupe " + gid);
+						System.out.println("User " + uid + " retiré du groupe " + gid);
 						break;
 					}
 					case NOTIF_GROUP_DELETED: {
 						int gid = buf.getInt();
-						System.out.println("✓ Groupe " + gid + " supprimé");
+						System.out.println("Groupe " + gid + " supprimé");
 						break;
 					}
 					case NOTIF_ERROR: {
 						int len = buf.getInt();
 						byte[] msg = new byte[len];
 						buf.get(msg);
-						System.out.println("✗ ERREUR: " + new String(msg, StandardCharsets.UTF_8));
+						System.out.println("ERREUR: " + new String(msg, StandardCharsets.UTF_8));
 						break;
 					}
-
 					case NOTIF_NICKNAME_CHANGED: {
 						int uid = buf.getInt();
 						int len = buf.getInt();
@@ -327,14 +305,14 @@ public class ClientMsg {
 						buf.get(name);
 						String newName = new String(name, StandardCharsets.UTF_8);
 						c.nicknames.put(uid, newName);
-						System.out.println("✓ User " + uid + " s'appelle désormais '" + newName + "'");
+						System.out.println("User " + uid + " s'appelle désormais '" + newName + "'");
 						break;
 					}
 					default:
 						System.out.println("Notification inconnue: type=" + type);
 				}
 			} else {
-				// Message normal (privé ou groupe)
+				// Message normal (privé ou groupe) - avec affichage des nicknames
 				String from = c.displayName(p.srcId);
 				String to = (p.destId < 0) ? ("groupe " + p.destId) : c.displayName(p.destId);
 				System.out.println(from + " says to " + to + ": " + new String(p.data));
@@ -347,68 +325,53 @@ public class ClientMsg {
 				System.exit(0);
 		});
 
+		// listener qui détecte et sauvegarde les fichiers reçus
+		c.addMessageListener(p -> {
+			if (p.data[0] == 2) {
+				c.recevoirFichier(p);
+			}
+		});
+
 		c.startSession();
 		System.out.println("Vous êtes : " + c.getIdentifier());
 
-		// Thread.sleep(5000);
-
-		// l'utilisateur avec id 4 crée un grp avec 1 et 3 dedans (et lui meme)
-		/*
-		 * if (c.getIdentifier() == 4) {
-		 * ByteArrayOutputStream bos = new ByteArrayOutputStream();
-		 * DataOutputStream dos = new DataOutputStream(bos);
-		 * 
-		 * // byte 1 : create group on server
-		 * dos.writeByte(1);
-		 * 
-		 * // nb members
-		 * dos.writeInt(2);
-		 * // list members
-		 * dos.writeInt(1);
-		 * dos.writeInt(3);
-		 * dos.flush();
-		 * 
-		 * c.sendPacket(0, bos.toByteArray());
-		 * 
-		 * }
-		 */
 
 		Scanner sc = new Scanner(System.in);
 		String lu = null;
+
 		while (!"\\quit".equals(lu)) {
 			try {
-				System.out.println("A qui voulez vous écrire ? (ou /new, /add, /rm, /del, /leave, /nick, /quit)");
-				String ligne = sc.nextLine().trim();// sc.nextLine() lis toute la ligne, trim() enlève les spaces
-				if (ligne.isEmpty())
-					continue;
-				if (ligne.startsWith("/")) { // 如果/开始就是一个命令
-					String[] parts = ligne.split("\\s+");// split多个空白格拆分字符串
-					/*
-					 * parts[0] = "/add"
-					 * parts[1] = "-1"
-					 * parts[2] = "5"
-					 */
+				System.out.println("Tapez 'message', 'fichier', une commande (/history, /new, /add, /rm, /del, /leave, /nick), ou '\\quit' :");
+				lu = sc.nextLine().trim();
+
+				if (lu.isEmpty()) continue;
+
+				if (lu.startsWith("/")) { //如果/开始就是一个命令
+					String[] parts = lu.split("\\s+");
 					String cmd = parts[0];
 					switch (cmd) {
+						// --- FUSION : Ajout de la commande /history ---
+						case "/history":
+							c.history.afficherHistorique(c.getIdentifier());
+							break;
+
 						case "/new": {
-							// Syntaxe: /new 2,3,4 (liste des membres séparée par virgules,
-							// sans id de groupe : le serveur attribue automatiquement un id négatif)
-							if (parts.length < 3) {
-								System.out.println("Usage: /new <Nom> <id1,id2,...>   ex: /new LesBaddies 2,3,4");
+							// Syntaxe: /new 2,3,4 (liste des membres séparée par virgules)
+							if (parts.length < 2) {
+								System.out.println("Usage: /new <id1,id2,...> ex: /new 2,3,4");
 								break;
 							}
-							String groupName = parts[1]; // Le premier argument après /new est le nom
-							String[] ids = parts[2].split(","); // Le deuxième est la liste d'IDs
-
-							int[] members = new int[ids.length];
-							for (int i = 0; i < ids.length; i++) {
-								members[i] = Integer.parseInt(ids[i].trim());
+							StringBuilder sb = new StringBuilder();
+							for (int i = 1; i < parts.length; i++) {
+								if (i > 1) sb.append(",");
+								sb.append(parts[i]);
 							}
-
-							// On appelle la méthode avec les DEUX arguments : le nom et les membres
-							c.requestCreateGroup(groupName, members);
-
-							System.out.println("Demande: créer groupe '" + groupName + "' envoyée");
+							String[] ids = sb.toString().split(",");
+							int[] members = new int[ids.length];
+							for (int i = 0; i < ids.length; i++)
+								members[i] = Integer.parseInt(ids[i].trim());
+							c.requestCreateGroup(members);
+							System.out.println("Demande: créer groupe avec membres " + sb + " envoyée");
 							break;
 						}
 
@@ -448,7 +411,6 @@ public class ClientMsg {
 							c.requestLeaveGroup(gid);
 							System.out.println("Demande: quitter le groupe " + gid + " envoyée");
 							break;
-
 						}
 
 						case "/quit": {
@@ -461,7 +423,6 @@ public class ClientMsg {
 								System.out.println("Usage: /nick <nouveau_pseudo>");
 								break;
 							}
-
 							StringBuilder sb = new StringBuilder();
 							for (int i = 1; i < parts.length; i++) {
 								if (i > 1)
@@ -473,17 +434,57 @@ public class ClientMsg {
 							break;
 						}
 
+						case "/quit": {
+							lu = "\\quit";
+							break;
+						}
+
 						default:
 							System.out.println("Commande inconnue");
 					}
 					Thread.sleep(500);
-				} else {
-					// envoie de messages directs à un autre utilisateurs
-					int dest = Integer.parseInt(ligne);
+
+				} else if (lu.equals("message")) {
+					System.out.println("A qui voulez vous écrire ? ");
+					int dest = Integer.parseInt(sc.nextLine());
+
 					System.out.println("Votre message ? ");
 					lu = sc.nextLine();
-					c.sendPacket(dest, lu.getBytes());
-					// lu.getBytes() 把字符串String转成byte字节数组
+					c.sendPacket(dest, lu.getBytes(StandardCharsets.UTF_8));
+					// on sauvegarde dans la BDD
+					if (c.history != null) {
+						c.history.saveMessage(c.getIdentifier(), dest, lu);
+					}
+
+				} else if (lu.equals("fichier")) {
+					System.out.println("A qui voulez vous écrire ? ");
+					int dest = Integer.parseInt(sc.nextLine());
+
+					System.out.println("Chemin du fichier ? ");
+					String chemin = sc.nextLine();
+					File fichier = new File(chemin);
+					if (fichier.exists()) {
+						c.envoyerFichier(dest, fichier);
+					} else {
+						System.out.println("Fichier introuvable !");
+					}
+
+				} else {
+					// envoi de messages directs à un autre utilisateur
+					try {
+						int dest = Integer.parseInt(lu);
+						System.out.println("Votre message ? ");
+						lu = sc.nextLine();
+						if (!"\\quit".equals(lu)) {
+							c.sendPacket(dest, lu.getBytes(StandardCharsets.UTF_8));
+							// on sauvegarde dans la BDD
+							if (c.history != null) {
+								c.history.saveMessage(c.getIdentifier(), dest, lu);
+							}
+						}
+					} catch (NumberFormatException e) {
+						System.out.println("Commande inconnue. Tapez 'message', 'fichier' ou /...");
+					}
 				}
 
 			} catch (Exception e) {
@@ -506,16 +507,6 @@ public class ClientMsg {
 
 		}
 
-		/*
-		 * int id =1+(c.getIdentifier()-1) % 2; System.out.println("send to "+id);
-		 * c.sendPacket(id, "bonjour".getBytes());
-		 * 
-		 * 
-		 * Thread.sleep(10000);
-		 */
-
 		c.closeSession();
-
 	}
-
 }

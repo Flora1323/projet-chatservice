@@ -1,3 +1,4 @@
+package fr.uga.miashs.dciss.chatservice.client;
 
 
 public class Test {

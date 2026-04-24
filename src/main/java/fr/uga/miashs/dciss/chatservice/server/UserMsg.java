@@ -32,6 +32,8 @@ public class UserMsg implements PacketProcessor, Serializable {
 	private transient Socket s;
 	private transient boolean active;
 
+	private String nickname;
+
 	private BlockingQueue<Packet> sendQueue; // les messages sont sauvegardés
 
 	public UserMsg(int clientId, ServerMsg server) {
@@ -42,6 +44,16 @@ public class UserMsg implements PacketProcessor, Serializable {
 		active = false;
 		sendQueue = new LinkedBlockingQueue<>();
 		groups = Collections.synchronizedSet(new HashSet<>());
+
+		this.nickname = "User" + clientId;//id par défaut
+	}
+
+	public String getNickname() {
+		return nickname;
+	}
+	
+	public void setNickname(String n) { 
+		this.nickname = n; 
 	}
 
 	public int getId() {

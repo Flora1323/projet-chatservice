@@ -2,6 +2,8 @@ package fr.uga.miashs.dciss.chatservice.client;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Message {
 
@@ -23,24 +25,31 @@ public class Message {
             e.printStackTrace(); 
         }
     }
-
+    
     // Lire les messages pour un utilisateur ou groupe
-    public static void getMessages(int receiverId) throws Exception {
+ //MÉTHODE MODIFIÉE : On renvoie maintenant une List<String>
+    // pour que celui qui appelle la méthode puisse faire ce qu'il veut avec (afficher, sauvegarder dans un fichier, etc.)
+    public static List<String> getMessages(int userId) throws Exception {
+        List<String> resultats = new ArrayList<>();
         try {
             Connection conn = DB.connect();
 
-            String sql = "SELECT * FROM messages WHERE receiver_id = ?";
+            // SQL Amélioré : On cherche les messages où l'utilisateur est l'expéditeur OU le destinataire
+            String sql = "SELECT * FROM messages WHERE receiver_id = ? OR sender_id = ? ORDER BY id ASC";
             PreparedStatement ps = conn.prepareStatement(sql);
-            ps.setInt(1, receiverId);
+            ps.setInt(1, userId);
+            ps.setInt(2, userId);
 
             ResultSet rs = ps.executeQuery();
 
             while (rs.next()) {
-                System.out.println(
-                    rs.getInt("sender_id") + " -> " +
-                    rs.getInt("receiver_id") + " : " +
-                    rs.getString("content")
-                );
+                // On crée la ligne de texte
+                String ligne = rs.getInt("sender_id") + " -> " +
+                               rs.getInt("receiver_id") + " : " +
+                               rs.getString("content");
+                
+                // Au lieu de l'afficher, on l'ajoute à la liste
+                resultats.add(ligne);
             }
 
             rs.close();   
@@ -49,13 +58,13 @@ public class Message {
         } catch (Exception e) {
             e.printStackTrace(); 
         }
+        return resultats; // On renvoie la liste à celui qui a appelé la méthode
     }
 
     // Sauvegarder un fichier (juste le chemin)
     public static void saveFile(int messageId, String path) throws Exception {
         try {
             Connection conn = DB.connect();
-
             String sql = "INSERT INTO files(message_id, file_path) VALUES(?,?)";
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setInt(1, messageId);

@@ -3,6 +3,7 @@ target/
 *.class
 *.jar
 *.war
+*.db
 
 # IDE files
 .idea/
@@ -17,6 +18,10 @@ Thumbs.db
 .DS_Store
 .classpath 
 
+# Fichiers générés par les tests
+fichiers_recus/
+server_state.ser
+
 # Logs
 *.log
 
@@ -25,3 +30,4 @@ derby.log
 sample/
 server-state.ser
 client-*.db/
+/bin/

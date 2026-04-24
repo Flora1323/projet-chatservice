@@ -422,14 +422,13 @@ public class ChatUI extends Application {
                                                                                             // Met à jour la map des
                                                                                             // nicknames !
                             client.getNicknamesMap().put(uid, newName);
-                            Platform.runLater(() -> addMessage("✨ " + uid + " s'appelle maintenant " + newName, false)); // on
-                                                                                                                         // affiche
-                                                                                                                         // la
-                                                                                                                         // notification
-                                                                                                                         // de
-                                                                                                                         // changement
-                                                                                                                        // de
-                                                                                                                         // pseudo
+                            Contact.sauvegarderContact(uid, newName); // On sauvegarde le nouveau pseudo dans la BDD pour le retrouver plus tard
+                            Platform.runLater(() -> {
+                            	
+                            addMessage("✨ " + uid + " s'appelle maintenant " + newName, false); // on affiche la notification de changement de pseudo
+                            contactList.getChildren().clear();
+                            afficherListeContacts();
+                            });                                                                                           
                             break;
                         }
                         case NOTIF_ALL_NICKNAMES: {
@@ -445,6 +444,9 @@ public class ChatUI extends Application {
                             Platform.runLater(() -> {
                                 String monNom = client.displayName(client.getIdentifier());
                                 statusLabel.setText("Connecté en tant que : " + monNom + " (ID : " + client.getIdentifier() + ")");
+                                
+                                contactList.getChildren().clear();
+                                afficherListeContacts();
                             });
                             break;
                         }
@@ -632,6 +634,7 @@ public class ChatUI extends Application {
                 String pseudo = isMine ? "Moi" : client.getNicknamesMap().getOrDefault(arc.senderId, "ID " + arc.senderId);
                 
                 addHistoryMessage("🕰️ " + pseudo + " : " + arc.content, isMine); 
+            }
             }
         } catch (Exception e) {
             System.out.println("Erreur de changement de conversation : " + e.getMessage());

@@ -153,6 +153,22 @@ public class Message {
     }
 
 
+    public static void main(String[] args) {
+        try {
+            System.out.println("--- TEST DE LA BDD ---");
+            // 1. On essaie d'insérer un message de test
+            insertMessage(1, 2, "Test de communication BDD");
+            System.out.println("✅ Insertion réussie !");
+
+            // 2. On essaie de le relire
+            List<Archive> tests = getMessagesSpecifiques(1, 2);
+            System.out.println("✅ Lecture réussie, nombre de messages : " + tests.size());
+            
+        } catch (Exception e) {
+            System.out.println("❌ Erreur lors du test : " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
 
 
 }

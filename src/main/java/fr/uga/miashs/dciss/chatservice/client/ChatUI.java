@@ -514,6 +514,8 @@ public class ChatUI extends Application {
                         // history.saveMessage(p.srcId, p.destId, msg); // SAUVEGARDE DANS LA BDD
                         Platform.runLater(() -> addMessage("[" + groupName + "] " + sender + " : " + msg, false));
                     } else {
+                    	// sauvegarde le message reçu
+                    	Message.insertMessage(p.srcId, client.getIdentifier(), msg);
                         Platform.runLater(() -> addMessage(sender + " : " + msg, false));
                     }
                 }

@@ -30,6 +30,7 @@ public class ChatUI extends Application {
     private TextField destField;
     private Label statusLabel;
     private VBox groupList;
+    private VBox contactList;
 
     // Une seule Map locale suffit pour faire le lien temporaire
     private Map<Integer, String> customGroupNames = new HashMap<>();
@@ -90,6 +91,15 @@ public class ChatUI extends Application {
         Label groupTitle = new Label("Groupes");
         groupTitle.setFont(Font.font("Arial", FontWeight.BOLD, 14));
         groupTitle.setTextFill(Color.WHITE);
+        
+        Label contactTitle = new Label("Mes Contacts");
+        contactTitle.setFont(Font.font("Arial", FontWeight.BOLD, 14));
+        contactTitle.setTextFill(Color.WHITE);
+        
+        contactList = new VBox(5);
+        
+        // Ajoute-les au leftPanel (avant ou après les groupes, comme tu préfères !)
+        leftPanel.getChildren().addAll(contactTitle, contactList);
 
         // BOUTON POUR CREER UN GROUPE
         Button createGroupBtn = new Button("+ Créer groupe");
@@ -469,10 +479,36 @@ public class ChatUI extends Application {
         scrollPane.layout();
         scrollPane.setVvalue(1.0);
     }
+    // #############################
+    // Affichage de la liste de contacts
+    // #############################
+    
+    private void afficherListeContacts() {
+        // On récupère la liste BDD
+        List<Contact> contactsBdd = DB.getAllContacts(); // ou Message.getAllContacts()
+        
+        // On tourne sur chaque contact
+        for (Contact c : contactsBdd) {
+            // On ne crée pas de bouton pour discuter avec soi-même !
+            if (c.getId() == client.getIdentifier()) continue; 
+            
+            // On crée un joli bouton
+            Button btnContact = new Button(c.getNickname());
+            btnContact.setStyle("-fx-background-color: transparent; -fx-text-fill: #FFDEE2; -fx-font-weight: bold;");
+            
+            // L'ACTION DU CLIC
+            btnContact.setOnAction(e -> {
+                changerDeConversation(c.getId());
+            });
+            
+            // On ajoute le bouton à la barre de gauche
+            contactList.getChildren().add(btnContact);
+        }
+    }
     
     // #############################
     // Affichage de l'historique
-    // ####################################
+    // #############################
     private void addHistoryMessage(String text, boolean isMine) {
         HBox container = new HBox(); 
         Label bubble = new Label(text); 
@@ -520,6 +556,29 @@ public class ChatUI extends Application {
             }
         } catch (Exception e) {
             System.out.println("Erreur lors du chargement de l'historique : " + e.getMessage());
+        }
+    }
+    
+    // ####################################
+    // FONCTION POUR CHANGER DE DISCUSSION
+    // ####################################
+    private void changerDeConversation(int destId) {
+        // On remplit automatiquement le champ "À :" en haut
+        destField.setText(String.valueOf(destId));
+        messagesBox.getChildren().clear();
+        try {
+            int monId = client.getIdentifier(); 
+
+            List<Archive> archives = Message.getMessagesSpecifiques(monId, destId);
+            
+            for (Archive arc : archives) {
+                boolean isMine = (arc.senderId == monId);
+                String pseudo = isMine ? "Moi" : client.getNicknamesMap().getOrDefault(arc.senderId, "ID " + arc.senderId);
+                
+                addHistoryMessage("🕰️ " + pseudo + " : " + arc.content, isMine); 
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur de changement de conversation : " + e.getMessage());
         }
     }
 

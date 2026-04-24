@@ -118,7 +118,6 @@ public class ClientMsg {
 	private void receiveLoop() {
 		try {
 			while (s != null && !s.isClosed()) {
-
 				int sender = dis.readInt();
 				int dest = dis.readInt();
 				int length = dis.readInt();
@@ -130,17 +129,18 @@ public class ClientMsg {
 				String texteRecu = new String(data, StandardCharsets.UTF_8);
 				
 				//on envoie le message dans la classe sauvegarde (de LocalHistoryManager) 
-				if (history != null) {
+				if (history != null && sender != 0) { // on n'enregistre pas les notifications du serveur (sender=0)
 					history.saveMessage(sender, dest, texteRecu);
 				}
-				
+
 				notifyMessageListeners(new Packet(sender, dest, data));
 
 			}
 		} catch (IOException e) {
 			// error, connection closed
+			closeSession();
 		}
-		closeSession();
+	
 	}
 
 	public void closeSession() {
@@ -234,9 +234,6 @@ public class ClientMsg {
 		int id = args.length > 1 ? Integer.parseInt(args[1]) : 0; // 0 = nouvel utilisateur
 
 		ClientMsg c = new ClientMsg(id, host,1666);
-		
-		// ---on allume la bdd ---
-		c.history.connect();
 
 		// add a dummy listener that print the content of message as a string
 		c.addMessageListener(p -> {
@@ -414,6 +411,10 @@ public class ClientMsg {
 						lu = sc.nextLine();
 						if (!"\\quit".equals(lu)) {
 							c.sendPacket(dest, lu.getBytes(StandardCharsets.UTF_8));
+						}
+						if (c.history != null) {
+							//pour enregistrer le message envoyé dans la BDD
+							c.history.saveMessage(c.getIdentifier(), dest, lu);
 						}
 					}
 				} catch (Exception e) {

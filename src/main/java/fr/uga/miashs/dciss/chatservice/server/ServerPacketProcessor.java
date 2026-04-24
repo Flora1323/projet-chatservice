@@ -60,6 +60,10 @@ public class ServerPacketProcessor implements PacketProcessor {
 				setNickname(p.srcId, buf);
 				break;
 
+			case QUERY_PRESENCE:
+				queryPresence(p.srcId);
+				break;
+
 			default:
 				LOG.warning("Type de message inconnu : " + type + " pour srcId=" + p.srcId);
 				break;
@@ -312,6 +316,102 @@ public class ServerPacketProcessor implements PacketProcessor {
 		buf.putInt(msgBytes.length);
 		buf.put(msgBytes);
 		sendNotification(userId, buf.array());
+	}
+
+	/* =====================  PRESENCE  ===================== */
+
+	/**
+	 * Appelé par UserMsg.open() quand un utilisateur vient de se connecter.
+	 * 1) envoie au nouveau connecté la liste des contacts déjà en ligne (snapshot)
+	 * 2) prévient les membres de ses groupes qu'il est maintenant en ligne
+	 */
+	public void onUserOnline(UserMsg u) {
+		if (u == null)
+			return;
+
+		// 1) snapshot envoyé uniquement à l'utilisateur qui vient de se connecter
+		byte[] snapshot = buildPresenceSnapshot(u);
+		sendNotification(u.getId(), snapshot);
+
+		// 2) notifier les membres des groupes de u (sauf u lui-même)
+		byte[] onlineMsg = buildPresenceEvent(NOTIF_USER_ONLINE, u.getId());
+		broadcastPresence(u, onlineMsg);
+	}
+
+	/**
+	 * Appelé par UserMsg.close() quand un utilisateur se déconnecte.
+	 * Prévient les membres de ses groupes qu'il est maintenant hors ligne.
+	 */
+	public void onUserOffline(UserMsg u) {
+		if (u == null)
+			return;
+		byte[] offlineMsg = buildPresenceEvent(NOTIF_USER_OFFLINE, u.getId());
+		broadcastPresence(u, offlineMsg);
+	}
+
+	/**
+	 * Réponse à une commande /refresh côté client :
+	 * reconstruit un snapshot de présence pour l'utilisateur srcId
+	 * et le lui renvoie.
+	 */
+	private void queryPresence(int srcId) {
+		UserMsg u = server.getUser(srcId);
+		if (u == null) {
+			notifyError(srcId, "Utilisateur introuvable");
+			return;
+		}
+		byte[] snapshot = buildPresenceSnapshot(u);
+		sendNotification(u.getId(), snapshot);
+	}
+
+	/**
+	 * Construit : [type][userId] (9 octets) pour ONLINE / OFFLINE.
+	 */
+	private byte[] buildPresenceEvent(byte type, int userId) {
+		ByteBuffer buf = ByteBuffer.allocate(1 + 4);
+		buf.put(type);
+		buf.putInt(userId);
+		return buf.array();
+	}
+
+	/**
+	 * Construit le snapshot envoyé à un utilisateur qui vient de se connecter :
+	 * [NOTIF_PRESENCE_SNAPSHOT][nb][id1][id2]...
+	 * Contient les ids des utilisateurs actuellement en ligne et partageant au
+	 * moins un groupe avec u (u lui-même n'est pas inclus).
+	 */
+	private byte[] buildPresenceSnapshot(UserMsg u) {
+		java.util.Set<Integer> onlineIds = new java.util.HashSet<>();
+		for (GroupMsg g : u.getGroups()) {
+			for (UserMsg m : g.getMembers()) {
+				if (m.getId() != u.getId() && m.isConnected()) {
+					onlineIds.add(m.getId());
+				}
+			}
+		}
+		ByteBuffer buf = ByteBuffer.allocate(1 + 4 + 4 * onlineIds.size());
+		buf.put(NOTIF_PRESENCE_SNAPSHOT);
+		buf.putInt(onlineIds.size());
+		for (int id : onlineIds) {
+			buf.putInt(id);
+		}
+		return buf.array();
+	}
+
+	/**
+	 * Envoie un événement de présence (ONLINE/OFFLINE) à tous les membres des
+	 * groupes de u, sauf u lui-même. Déduplication via Set.
+	 */
+	private void broadcastPresence(UserMsg u, byte[] data) {
+		java.util.Set<Integer> done = new java.util.HashSet<>();
+		done.add(u.getId()); // ne pas s'envoyer à soi-même
+		for (GroupMsg g : u.getGroups()) {
+			for (UserMsg m : g.getMembers()) {
+				if (done.add(m.getId())) {
+					sendNotification(m.getId(), data);
+				}
+			}
+		}
 	}
 
 }

@@ -11,6 +11,8 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
+
+import java.io.IOException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -32,6 +34,9 @@ public class ChatUI extends Application {
     // Une seule Map locale suffit pour faire le lien temporaire
     private Map<Integer, String> customGroupNames = new HashMap<>();
     private String lastCreatedGroupName;
+
+    // Historique des messages
+    private LocalHistoryManager history = new LocalHistoryManager();
 
     @Override
     public void start(Stage stage) {
@@ -218,6 +223,8 @@ public class ChatUI extends Application {
                 // envoie le message via ClientMsg
                 client.sendPacket(destId, msg.getBytes()); // on envoie le message au serveur pour qu'il le redirige au
                                                            // destinataire
+                // sauvegarde le message envoyé dans la BDD
+                history.saveMessage(client.getIdentifier(), destId, msg);
                 addMessage(msg, true); // on affiche le message dans la zone de messages (true
                                        // = c'est un message envoyé par moi)
                 inputField.clear();
@@ -235,6 +242,8 @@ public class ChatUI extends Application {
             try {
                 int destId = Integer.parseInt(destText);
                 client.sendPacket(destId, msg.getBytes());
+                // sauvegarde le message envoyé dans la BDD
+                history.saveMessage(client.getIdentifier(), destId, msg);
                 addMessage(msg, true);
                 inputField.clear();
             } catch (NumberFormatException ex) {
@@ -384,6 +393,9 @@ public class ChatUI extends Application {
                             buf.get(nameBytes);
                             String newName = new String(nameBytes, StandardCharsets.UTF_8); // on suppose que le pseudo
                                                                                             // est encodé en UTF-8
+                                                                                            // Met à jour la map des
+                                                                                            // nicknames !
+                            client.getNicknamesMap().put(uid, newName);
                             Platform.runLater(() -> addMessage("✨ " + uid + " s'appelle maintenant " + newName, false)); // on
                                                                                                                          // affiche
                                                                                                                          // la
@@ -392,6 +404,20 @@ public class ChatUI extends Application {
                                                                                                                          // changement
                                                                                                                          // de
                                                                                                                          // pseudo
+                            break;
+                        }
+                        case NOTIF_ALL_NICKNAMES: {
+                            int nb = buf.getInt();
+                            for (int i = 0; i < nb; i++) {
+                                int uid = buf.getInt();
+                                int len = buf.getInt();
+                                byte[] nameBytes = new byte[len];
+                                buf.get(nameBytes);
+                                String name = new String(nameBytes, StandardCharsets.UTF_8);
+                                client.getNicknamesMap().put(uid, name);
+                            }
+                            Platform.runLater(() -> statusLabel.setText("ID : " + client.getIdentifier() + " ("
+                                    + client.displayName(client.getIdentifier()) + ")"));
                             break;
                         }
                         case NOTIF_ERROR: {
@@ -406,10 +432,24 @@ public class ChatUI extends Application {
                     }
                 } else {
                     String msg = new String(p.data);
+
+
+
+                    // --- DEBUG ZONE ---
+                    System.out.println("DEBUG NICKNAMES :");
+                    System.out.println("  - Map actuelle : " + client.getNicknamesMap());
+                    System.out.println("  - Recherche ID : " + p.srcId);
+                    System.out.println("  - Résultat displayName : " + client.displayName(p.srcId));
+                    // ------------------
+
+
+                    
                     String sender = client.displayName(p.srcId); // Utilise le pseudo
 
                     if (p.destId < 0) { // Si c'est un message de groupe
                         String groupName = client.displayName(p.destId);
+                        // sauvegarde le message reçu
+                        history.saveMessage(p.srcId, p.destId, msg);
                         Platform.runLater(() -> addMessage("[" + groupName + "] " + sender + " : " + msg, false));
                     } else {
                         Platform.runLater(() -> addMessage(sender + " : " + msg, false));
@@ -429,6 +469,13 @@ public class ChatUI extends Application {
             });
 
             client.startSession();
+
+            // Demande tous les nicknames au serveur
+            try {
+                client.requestAllNicknames();
+            } catch (IOException e) {
+                System.out.println("Erreur requête nicknames : " + e.getMessage());
+            }
 
         } catch (UnknownHostException e) {
             System.out.println("Erreur connexion serveur");

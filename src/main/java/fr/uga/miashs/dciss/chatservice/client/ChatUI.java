@@ -187,6 +187,12 @@ public class ChatUI extends Application {
         inputField.setStyle("-fx-background-radius: 20; -fx-padding: 8 15 8 15;"); // arrondit les bords et ajoute du
                                                                                    // padding
         HBox.setHgrow(inputField, Priority.ALWAYS); // prend tout l'espace disponible
+        
+     // Bouton fichier
+        Button fileButton = new Button("📎");
+        fileButton.setStyle(
+                "-fx-background-color: #F4C9D6; -fx-text-fill: #3E2723; "
+                        + "-fx-background-radius: 20; -fx-font-size: 16; -fx-padding: 5 12 5 12;");
 
         // Bouton envoyer
         Button sendButton = new Button("➤");

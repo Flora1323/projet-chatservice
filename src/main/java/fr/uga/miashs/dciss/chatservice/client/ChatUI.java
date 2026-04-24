@@ -198,13 +198,8 @@ public class ChatUI extends Application {
         sendButton.setStyle(
                 "-fx-background-color: #3E2723; -fx-text-fill: white; "
                         + "-fx-background-radius: 20; -fx-font-size: 16; -fx-padding: 5 15 5 15;"); // bleu azur, texte
-        // blanc, arrondi,
-        // taille de police
-        // 16, padding
 
-        bottomBar.getChildren().addAll(inputField, fileButton, sendButton); // on ajoute le champ et le bouton à la barre du bas
-        root.setBottom(bottomBar); // on met la barre en bas
-
+                        
         // ####################################
         // Action du bouton envoyer
         // ####################################

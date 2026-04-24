@@ -411,10 +411,11 @@ public class ClientMsg {
 						lu = sc.nextLine();
 						if (!"\\quit".equals(lu)) {
 							c.sendPacket(dest, lu.getBytes(StandardCharsets.UTF_8));
-						}
-						if (c.history != null) {
-							//pour enregistrer le message envoyé dans la BDD
-							c.history.saveMessage(c.getIdentifier(), dest, lu);
+							//on sauvegarde uniquement si ce n'est pas la commande quit
+							if (c.history != null) {
+								//pour enregistrer le message envoyé dans la BDD
+								c.history.saveMessage(c.getIdentifier(), dest, lu);
+							}
 						}
 					}
 				} catch (Exception e) {

@@ -188,12 +188,6 @@ public class ChatUI extends Application {
                                                                                    // padding
         HBox.setHgrow(inputField, Priority.ALWAYS); // prend tout l'espace disponible
         
-     // Bouton fichier
-        Button fileButton = new Button("📎");
-        fileButton.setStyle(
-                "-fx-background-color: #F4C9D6; -fx-text-fill: #3E2723; "
-                        + "-fx-background-radius: 20; -fx-font-size: 16; -fx-padding: 5 12 5 12;");
-
         // Bouton envoyer
         Button sendButton = new Button("➤");
         sendButton.setStyle(
@@ -203,7 +197,7 @@ public class ChatUI extends Application {
         // taille de police
         // 16, padding
 
-        bottomBar.getChildren().addAll(inputField, sendButton); // on ajoute le champ et le bouton à la barre du bas
+        bottomBar.getChildren().addAll(inputField, fileButton, sendButton); // on ajoute le champ et le bouton à la barre du bas
         root.setBottom(bottomBar); // on met la barre en bas
 
         // ####################################
@@ -231,35 +225,7 @@ public class ChatUI extends Application {
                 System.out.println("ID invalide");
             }
         });
-       
-     // Action du bouton fichier
-        fileButton.setOnAction(e -> {
-            String destText = destField.getText().trim();
-            if (destText.isEmpty()) {
-                System.out.println("Veuillez entrer un ID destinataire");
-                return;
-            }
-            try {
-                int destId = Integer.parseInt(destText);
-                
-                // Ouvrir l'explorateur de fichiers
-                javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
-                fileChooser.setTitle("Choisir un fichier à envoyer");
-                java.io.File fichier = fileChooser.showOpenDialog(stage);
-                
-                if (fichier != null && fichier.exists()) {
-                    // Envoyer le fichier via ClientMsg
-                    client.envoyerFichier(destId, fichier);
-                    
-                    // Afficher dans ma propre interface
-                    afficherFichierEnvoye(fichier, fichier.getName());
-                }
-            } catch (NumberFormatException ex) {
-                System.out.println("ID invalide");
-            }
-        });
-        
-        
+      
         
         // Envoyer aussi avec la touche Entrée
         inputField.setOnAction(e -> {

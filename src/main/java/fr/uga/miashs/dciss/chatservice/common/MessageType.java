@@ -4,11 +4,13 @@ public final class MessageType {
     private MessageType() {
 
     }
+    // Client → Serveur
     public static final byte CREATE_GROUP = 1;
     public static final byte SUPPRIME_GROUP = 2;
     public static final byte AJOUT_MEMBRE = 3;
     public static final byte SUPPRIME_MEMBRE = 4;
     public static final byte LEAVE_GROUP = 5;
+    public static final byte GET_ALL_NICKNAMES = 7;
 
     // Serveur → Clients (Notification)
     public static final byte NOTIF_GROUP_CREATED  = 1;
@@ -16,8 +18,10 @@ public final class MessageType {
     public static final byte NOTIF_MEMBER_REMOVED = 3;
     public static final byte NOTIF_GROUP_DELETED  = 4;
     public static final byte NOTIF_ERROR          = 5;
+    public static final byte NOTIF_ALL_NICKNAMES = 7;
 
     //nickname
     public static final byte SET_NICKNAME = 6;
     public static final byte NOTIF_NICKNAME_CHANGED = 6;
+
 }

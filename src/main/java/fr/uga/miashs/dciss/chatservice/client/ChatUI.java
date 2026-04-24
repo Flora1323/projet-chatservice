@@ -11,6 +11,8 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
+
+import java.io.IOException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -32,6 +34,9 @@ public class ChatUI extends Application {
     // Une seule Map locale suffit pour faire le lien temporaire
     private Map<Integer, String> customGroupNames = new HashMap<>();
     private String lastCreatedGroupName;
+
+    // Historique des messages
+    private LocalHistoryManager history = new LocalHistoryManager();
 
     @Override
     public void start(Stage stage) {
@@ -218,6 +223,8 @@ public class ChatUI extends Application {
                 // envoie le message via ClientMsg
                 client.sendPacket(destId, msg.getBytes()); // on envoie le message au serveur pour qu'il le redirige au
                                                            // destinataire
+                // sauvegarde le message envoyé dans la BDD
+                history.saveMessage(client.getIdentifier(), destId, msg);
                 addMessage(msg, true); // on affiche le message dans la zone de messages (true
                                        // = c'est un message envoyé par moi)
                 inputField.clear();
@@ -236,6 +243,8 @@ public class ChatUI extends Application {
             try {
                 int destId = Integer.parseInt(destText);
                 client.sendPacket(destId, msg.getBytes());
+                // sauvegarde le message envoyé dans la BDD
+                history.saveMessage(client.getIdentifier(), destId, msg);
                 addMessage(msg, true);
                 inputField.clear();
             } catch (NumberFormatException ex) {
@@ -275,8 +284,9 @@ public class ChatUI extends Application {
 
         // Action : Exclure
         removeMember.setOnAction(e -> {
+            String gName = client.displayName(gid);
             TextInputDialog dialog = new TextInputDialog();
-            dialog.setHeaderText("Exclure un membre du groupe " + gid);
+            dialog.setHeaderText("Exclure un membre du groupe " + gName);
             dialog.showAndWait().ifPresent(uid -> {
                 try {
                     client.requestRemoveMember(gid, Integer.parseInt(uid.trim()));
@@ -331,13 +341,14 @@ public class ChatUI extends Application {
                     switch (type) {
                         case NOTIF_GROUP_CREATED: {
                             int gid = buf.getInt();
-                            // Lire le nom envoyé par le serveur (ASSURE-TOI QUE LE SERVEUR L'ENVOIE BIEN !)
+                            // Lire le nom envoyé par le serveur
                             int nameLen = buf.getInt();
                             byte[] nameBytes = new byte[nameLen];
                             buf.get(nameBytes);
                             String gName = new String(nameBytes, StandardCharsets.UTF_8);
 
-                            // Maintenant que le getter existe, cette ligne va fonctionner !
+                            // on enregistre le nom du groupe dans la map des pseudos pour l'afficher
+                            // correctement
                             client.getNicknamesMap().put(gid, gName);
 
                             Platform.runLater(() -> {
@@ -354,8 +365,11 @@ public class ChatUI extends Application {
                             buf.get(nameBytes);
                             String gName = new String(nameBytes, StandardCharsets.UTF_8);
 
+                            // On récupère le nom de l'utilisateur ajouté
+                            String uName = client.displayName(uid);
+
                             Platform.runLater(() -> {
-                                addMessage("✓ User " + uid + " ajouté au groupe " + gName, false);
+                                addMessage("✓ " + uName + " ajouté au groupe " + gName, false);
                                 if (uid == client.getIdentifier()) {
                                     client.getNicknamesMap().put(gid, gName);
                                     groupList.getChildren().add(createGroupButton(gid));
@@ -366,8 +380,13 @@ public class ChatUI extends Application {
                         case NOTIF_MEMBER_REMOVED: {
                             int gid = buf.getInt();
                             int uid = buf.getInt();
+
+                            // On transforme les IDs en noms
+                            String uName = client.displayName(uid);
+                            String gName = client.displayName(gid);
+
                             Platform.runLater(() -> {
-                                addMessage("✓ User " + uid + " retiré du groupe " + gid, false);
+                                addMessage("✓ " + uName + " retiré du groupe " + gName, false);
                                 // SI C'EST MOI qui suis retiré (ou qui ai quitté), j'enlève le bouton
                                 if (uid == client.getIdentifier()) {
                                     removeGroupButton(gid);
@@ -377,8 +396,11 @@ public class ChatUI extends Application {
                         }
                         case NOTIF_GROUP_DELETED: {
                             int gid = buf.getInt();
+
+                            String gName = client.displayName(gid); // On récupère le nom du groupe
+
                             Platform.runLater(() -> {
-                                addMessage("✓ Groupe " + gid + " supprimé", false);
+                                addMessage("✓ Le groupe " + gName + " a été supprimé", false);
                                 removeGroupButton(gid); // On enlève le bouton car le groupe n'existe plus
                             });
                             break;
@@ -390,6 +412,9 @@ public class ChatUI extends Application {
                             buf.get(nameBytes);
                             String newName = new String(nameBytes, StandardCharsets.UTF_8); // on suppose que le pseudo
                                                                                             // est encodé en UTF-8
+                                                                                            // Met à jour la map des
+                                                                                            // nicknames !
+                            client.getNicknamesMap().put(uid, newName);
                             Platform.runLater(() -> addMessage("✨ " + uid + " s'appelle maintenant " + newName, false)); // on
                                                                                                                          // affiche
                                                                                                                          // la
@@ -398,6 +423,22 @@ public class ChatUI extends Application {
                                                                                                                          // changement
                                                                                                                         // de
                                                                                                                          // pseudo
+                            break;
+                        }
+                        case NOTIF_ALL_NICKNAMES: {
+                            int nb = buf.getInt();
+                            for (int i = 0; i < nb; i++) {
+                                int uid = buf.getInt();
+                                int len = buf.getInt();
+                                byte[] nameBytes = new byte[len];
+                                buf.get(nameBytes);
+                                String name = new String(nameBytes, StandardCharsets.UTF_8);
+                                client.getNicknamesMap().put(uid, name);
+                            }
+                            Platform.runLater(() -> {
+                                String monNom = client.displayName(client.getIdentifier());
+                                statusLabel.setText("Connecté en tant que : " + monNom + " (ID : " + client.getIdentifier() + ")");
+                            });
                             break;
                         }
                         case NOTIF_ERROR: {
@@ -411,11 +452,14 @@ public class ChatUI extends Application {
                         }
                     }
                 } else {
+                    // --- RECEPTION DE MESSAGE NORMAL ---
                     String msg = new String(p.data);
                     String sender = client.displayName(p.srcId); // Utilise le pseudo
 
                     if (p.destId < 0) { // Si c'est un message de groupe
                         String groupName = client.displayName(p.destId);
+                        // sauvegarde le message reçu
+                        // history.saveMessage(p.srcId, p.destId, msg); // SAUVEGARDE DANS LA BDD
                         Platform.runLater(() -> addMessage("[" + groupName + "] " + sender + " : " + msg, false));
                     } else {
                         Platform.runLater(() -> addMessage(sender + " : " + msg, false));
@@ -427,7 +471,7 @@ public class ChatUI extends Application {
             client.addConnectionListener(active -> {
                 Platform.runLater(() -> {
                     if (active) {
-                        statusLabel.setText("ID : " + client.getIdentifier());
+                        statusLabel.setText("Connecté (ID: " + client.getIdentifier() + ")");
                     } else {
                         statusLabel.setText("Déconnecté");
                     }
@@ -435,6 +479,13 @@ public class ChatUI extends Application {
             });
 
             client.startSession();
+
+            // Demande tous les nicknames au serveur
+            try {
+                client.requestAllNicknames();
+            } catch (IOException e) {
+                System.out.println("Erreur requête nicknames : " + e.getMessage());
+            }
 
         } catch (UnknownHostException e) {
             System.out.println("Erreur connexion serveur");

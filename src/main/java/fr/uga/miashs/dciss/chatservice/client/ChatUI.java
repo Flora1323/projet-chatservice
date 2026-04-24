@@ -17,7 +17,6 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
-import javafx.application.Platform;
 import java.net.UnknownHostException;
 import javafx.scene.layout.Region;
 

@@ -308,7 +308,8 @@ public class ChatUI extends Application {
         // Action : Ajouter
         addMember.setOnAction(e -> {
             TextInputDialog dialog = new TextInputDialog();
-            dialog.setHeaderText("Ajouter un membre au groupe " + gid);
+            String gName = client.displayName(gid);
+            dialog.setHeaderText("Ajouter un membre au groupe " + gName);
             dialog.showAndWait().ifPresent(uid -> {
                 try {
                     client.requestAddMember(gid, Integer.parseInt(uid.trim()));
@@ -367,7 +368,7 @@ public class ChatUI extends Application {
             // quand on reçoit un message, on l'affiche à gauche
             client.addMessageListener(p -> {
                 // Si c'est un fichier (byte 2)
-                if (p.data != null && p.data.length > 0 && p.data[0] == 2) {
+                if (p.srcId != 0 && p.data != null && p.data.length > 0 && p.data[0] == 2) {
                     recevoirFichierUI(p);
                     return;
                 }
@@ -382,6 +383,8 @@ public class ChatUI extends Application {
                             byte[] nameBytes = new byte[nameLen];
                             buf.get(nameBytes);
                             String gName = new String(nameBytes, StandardCharsets.UTF_8);
+
+                                System.out.println("NOTIF_GROUP_CREATED reçu : gid=" + gid + " name=" + gName); // ← ajoute ça
 
                             // on enregistre le nom du groupe dans la map des pseudos pour l'afficher
                             // correctement

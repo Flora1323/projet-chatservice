@@ -483,7 +483,7 @@ public class ChatUI extends Application {
                     	int monId = client.getIdentifier();
                         statusLabel.setText("Connecté (ID: " + monId + ")");
                         chargerHistorique(monId); // Charge l'historique des messages depuis la BDD à la connexion
-                        Contact.insererContactsDeTest(); // Insère des contacts de test dans la BDD (à faire une seule fois)
+                        //Contact.insererContactsDeTest(); // Insère des contacts de test dans la BDD (à faire une seule fois)
                         afficherListeContacts(); // Affiche la liste des contacts à la connexion
 
                     } else {
@@ -633,6 +633,22 @@ public class ChatUI extends Application {
                 boolean isMine = (arc.senderId == monId);
                 String pseudo = isMine ? "Moi" : client.getNicknamesMap().getOrDefault(arc.senderId, "ID " + arc.senderId);
                 
+                if (arc.content.startsWith("[FICHIER]:")) {
+                    // On découpe le mot "[FICHIER]:" pour ne garder que "image.png"
+                    String nomFichier = arc.content.substring(10); 
+                    
+                    // On va chercher le fichier dans le dossier
+                    java.io.File fichierLocal = new java.io.File("fichiers_recus", nomFichier);
+                    
+                    if (fichierLocal.exists()) {
+                        // Le fichier est là, on l'affiche !
+                        afficherFichierHistorique(fichierLocal, nomFichier, pseudo, isMine);
+                    } else {
+                        // Le fichier a été supprimé de l'ordinateur, on affiche un texte d'erreur
+                        addHistoryMessage("🕰️ " + pseudo + " : ❌ [Fichier manquant] " + nomFichier, isMine);
+                    }
+                    
+                } else { 
                 addHistoryMessage("🕰️ " + pseudo + " : " + arc.content, isMine); 
             }
             }
@@ -674,6 +690,8 @@ public class ChatUI extends Application {
             if (!dossier.exists()) dossier.mkdirs();
             java.io.File fichierRecu = new java.io.File(dossier, nomFichier);
             java.nio.file.Files.write(fichierRecu.toPath(), fileBytes);
+            
+            Message.sauvegarderMessage(p.srcId, client.getIdentifier(), "[FICHIER]:" + nomFichier);
             
             // Afficher dans l'interface selon le type
             String sender = client.displayName(p.srcId);
@@ -775,6 +793,56 @@ public class ChatUI extends Application {
         scrollPane.setVvalue(1.0);
     }
 
+ // ####################################
+    // AFFICHER UN FICHIER DE L'HISTORIQUE EN GRIS
+    // ####################################
+    private void afficherFichierHistorique(java.io.File fichier, String nomFichier, String sender, boolean isMine) {
+        HBox container = new HBox();
+        VBox bubble = new VBox(5);
+        bubble.setPadding(new Insets(8, 12, 8, 12));
+        bubble.setMaxWidth(320);
+        
+        if (isMine) {
+            container.setAlignment(Pos.CENTER_RIGHT);
+            bubble.setStyle("-fx-background-color: #D3D3D3; -fx-background-radius: 15 15 0 15;");
+        } else {
+            container.setAlignment(Pos.CENTER_LEFT);
+            bubble.setStyle("-fx-background-color: #EBEBEB; -fx-background-radius: 15 15 15 0;");
+            
+            Label senderLabel = new Label("🕰️ " + sender);
+            senderLabel.setFont(Font.font("Arial", FontWeight.BOLD, 11));
+            senderLabel.setTextFill(Color.web("#3E2723"));
+            bubble.getChildren().add(senderLabel);
+        }
+        
+        // Détection du type
+        String ext = nomFichier.toLowerCase();
+        if (ext.endsWith(".png") || ext.endsWith(".jpg") || ext.endsWith(".jpeg") || ext.endsWith(".gif")) {
+            try {
+                javafx.scene.image.Image image = new javafx.scene.image.Image(fichier.toURI().toString());
+                javafx.scene.image.ImageView imageView = new javafx.scene.image.ImageView(image);
+                imageView.setFitWidth(200); // Un peu plus petit pour l'historique
+                imageView.setPreserveRatio(true);
+                bubble.getChildren().add(imageView);
+            } catch (Exception e) {
+                bubble.getChildren().add(new Label("📎 " + nomFichier));
+            }
+        } else {
+            Label fileLabel = new Label("📎 " + nomFichier);
+            fileLabel.setStyle("-fx-text-fill: #3E2723; -fx-underline: true; -fx-cursor: hand;");
+            fileLabel.setOnMouseClicked(e -> {
+                try { java.awt.Desktop.getDesktop().open(fichier); } 
+                catch (Exception ex) { System.out.println("Impossible d'ouvrir"); }
+            });
+            bubble.getChildren().add(fileLabel);
+        }
+        
+        container.getChildren().add(bubble);
+        messagesBox.getChildren().add(container);
+        scrollPane.layout();
+        scrollPane.setVvalue(1.0);
+    }
+    
     public static void main(String[] args) {
         launch(args);
     }

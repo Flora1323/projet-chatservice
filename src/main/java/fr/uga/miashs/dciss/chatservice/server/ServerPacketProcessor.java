@@ -193,8 +193,8 @@ public class ServerPacketProcessor implements PacketProcessor {
 			return;
 		}
 		if (g.getOwner().getId() == srcId) {
-			LOG.warning("Le propriétaire ne peut pas quitter son propre groupe. Utiliser /del.");
-			notifyError(srcId, "Le propriétaire ne peut pas quitter le groupe. Utilisez /del.");
+			LOG.warning("Le propriétaire ne peut pas quitter son propre groupe. Vous devez d'abord le supprimer.");
+			notifyError(srcId, "Le propriétaire ne peut pas quitter le groupe. Vous devez d'abord le supprimer.");
 			return;
 		}
 		// notifier AVANT removeMember pour que le partant reçoive aussi la notif

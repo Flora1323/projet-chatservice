@@ -234,6 +234,8 @@ public class ServerPacketProcessor implements PacketProcessor {
 
 	private void notifyNicknameChanged(UserMsg u) {
 		byte[] nameBytes = u.getNickname().getBytes(StandardCharsets.UTF_8);
+		// On prépare le paquet (1 octet type + 4 octets ID + 4 octets taille nom + le
+		// nom)
 		ByteBuffer buf = ByteBuffer.allocate(1 + 4 + 4 + nameBytes.length);
 		buf.put(NOTIF_NICKNAME_CHANGED);
 		buf.putInt(u.getId());
@@ -241,17 +243,12 @@ public class ServerPacketProcessor implements PacketProcessor {
 		buf.put(nameBytes);
 		byte[] data = buf.array();
 
-		// 通知自己 + 同群的人（去重）
-		java.util.Set<Integer> done = new java.util.HashSet<>();
-		done.add(u.getId());
-		sendNotification(u.getId(), data);
-		for (GroupMsg g : u.getGroups()) {
-			for (UserMsg m : g.getMembers()) {
-				if (done.add(m.getId())) {
-					sendNotification(m.getId(), data);
-				}
-			}
+		// ✨ BROADCAST GLOBAL : On envoie à tous les utilisateurs connectés
+		for (UserMsg recipient : server.getAllUsers()) {
+			sendNotification(recipient.getId(), data);
 		}
+
+		LOG.info("Notification de changement de pseudo pour " + u.getId() + " envoyée à tous.");
 	}
 
 	// Notification en format byte[] à un utilisateur spécifique
@@ -323,7 +320,8 @@ public class ServerPacketProcessor implements PacketProcessor {
 	}
 
 	// [7][nb][id1][len1][name1]...[idN][lenN][nameN]
-	// sendAllNicknames() est appelé en réponse à GET_ALL_NICKNAMES, ou après un changement de pseudo pour mettre à jour tous les clients
+	// sendAllNicknames() est appelé en réponse à GET_ALL_NICKNAMES, ou après un
+	// changement de pseudo pour mettre à jour tous les clients
 
 	private void sendAllNicknames(int userId) {
 		// Récupère tous les users et leurs nicknames

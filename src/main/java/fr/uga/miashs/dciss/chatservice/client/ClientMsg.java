@@ -164,6 +164,67 @@ public class ClientMsg {
 		s = null;
 		notifyConnectionListeners(false);
 	}
+	
+	//fichiers 
+		public void envoyerFichier(int destId, File file) {
+			try {
+				   //Lire le fichier en bytes
+				    byte[] fileBytes = Files.readAllBytes(file.toPath());
+			        byte[] nameBytes = file.getName().getBytes();
+
+
+			        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+			        DataOutputStream dos = new DataOutputStream(bos);
+
+			        //ecrire selon le protocole : type + taille nom + nom + taille fichier + contenu
+			        dos.writeByte(2);       // type = ?
+			        dos.writeInt(nameBytes.length);        // taille du nom
+			        dos.write(nameBytes);           // le nom
+			        dos.writeInt(fileBytes.length);        // taille du fichier
+			        dos.write(fileBytes);           // le contenu
+			        dos.flush( );
+
+			        //Envoyer via sendPacket
+			        sendPacket(destId, bos.toByteArray());
+
+			    } catch (IOException e) {
+			        e.printStackTrace();
+			    }
+			}
+
+
+		public void recevoirFichier(Packet p) {
+		    try {
+		        //réparper les outils pour LIRE les bytes du paquet
+		        ByteArrayInputStream bis = new ByteArrayInputStream(p.data);
+		        DataInputStream dis = new DataInputStream(bis);
+
+		        // Lire dans le même ordre qu'à l'envoi
+		        byte type = dis.readByte() ;              // lis le type
+		        int tailleNom = dis.readInt();          // lis la taille du nom
+
+		        // creer un tableau vide de la bonne taille, puis le remplir
+		        byte[] nameBytes = new byte[tailleNom];
+		        dis.readFully(nameBytes);
+		        String nomFichier = new String(nameBytes);
+
+		        int tailleFichier = dis.readInt();      // lis la taille du fichier
+		        byte[] fileBytes = new byte[tailleFichier];
+		        dis.readFully(fileBytes);
+
+		        // sauvegarder le fichier sur le disque
+		        File dossier = new File("fichiers_recus");
+		        if (!dossier.exists()) dossier.mkdirs();
+
+		        File fichierRecu = new File(dossier, nomFichier);
+		        Files.write(fichierRecu.toPath(), fileBytes);
+
+		        System.out.println("Fichier reçu : " + nomFichier + " de la part de " + p.srcId);
+
+		    } catch (IOException e) {
+		        e.printStackTrace();
+		    }
+		}
 
 	// 客户端向服务器发送一个“创建群组”的请求
 	public void requestCreateGroup(String groupName, int[] memberIds) throws IOException {

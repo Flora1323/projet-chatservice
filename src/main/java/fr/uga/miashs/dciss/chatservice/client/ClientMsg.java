@@ -49,7 +49,6 @@ public class ClientMsg {
 	private LocalHistoryManager history = new LocalHistoryManager();
 	private final Map<Integer, String> nicknames = new ConcurrentHashMap<>();
 
-
 	public ClientMsg(int id, String address, int port) {
 		if (id < 0)
 			throw new IllegalArgumentException("id must not be less than 0");
@@ -140,7 +139,7 @@ public class ClientMsg {
 				// pour transformer les octets en string
 				String texteRecu = new String(data, StandardCharsets.UTF_8);
 
-				//on envoie le message dans la classe sauvegarde (de LocalHistoryManager) 
+				// on envoie le message dans la classe sauvegarde (de LocalHistoryManager)
 				if (history != null && sender != 0) { // on n'enregistre pas les notifications du serveur (sender=0)
 					history.saveMessage(sender, dest, texteRecu);
 				}
@@ -163,6 +162,67 @@ public class ClientMsg {
 		}
 		s = null;
 		notifyConnectionListeners(false);
+	}
+
+	// fichiers
+	public void envoyerFichier(int destId, File file) {
+		try {
+			// Lire le fichier en bytes
+			byte[] fileBytes = Files.readAllBytes(file.toPath());
+			byte[] nameBytes = file.getName().getBytes();
+
+			ByteArrayOutputStream bos = new ByteArrayOutputStream();
+			DataOutputStream dos = new DataOutputStream(bos);
+
+			// ecrire selon le protocole : type + taille nom + nom + taille fichier +
+			// contenu
+			dos.writeByte(2); // type = ?
+			dos.writeInt(nameBytes.length); // taille du nom
+			dos.write(nameBytes); // le nom
+			dos.writeInt(fileBytes.length); // taille du fichier
+			dos.write(fileBytes); // le contenu
+			dos.flush();
+
+			// Envoyer via sendPacket
+			sendPacket(destId, bos.toByteArray());
+
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public void recevoirFichier(Packet p) {
+		try {
+			// réparper les outils pour LIRE les bytes du paquet
+			ByteArrayInputStream bis = new ByteArrayInputStream(p.data);
+			DataInputStream dis = new DataInputStream(bis);
+
+			// Lire dans le même ordre qu'à l'envoi
+			byte type = dis.readByte(); // lis le type
+			int tailleNom = dis.readInt(); // lis la taille du nom
+
+			// creer un tableau vide de la bonne taille, puis le remplir
+			byte[] nameBytes = new byte[tailleNom];
+			dis.readFully(nameBytes);
+			String nomFichier = new String(nameBytes);
+
+			int tailleFichier = dis.readInt(); // lis la taille du fichier
+			byte[] fileBytes = new byte[tailleFichier];
+			dis.readFully(fileBytes);
+
+			// sauvegarder le fichier sur le disque
+			File dossier = new File("fichiers_recus");
+			if (!dossier.exists())
+				dossier.mkdirs();
+
+			File fichierRecu = new File(dossier, nomFichier);
+			Files.write(fichierRecu.toPath(), fileBytes);
+
+			System.out.println("Fichier reçu : " + nomFichier + " de la part de " + p.srcId);
+
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	// 客户端向服务器发送一个“创建群组”的请求
@@ -243,7 +303,7 @@ public class ClientMsg {
 	public String displayName(int id) {
 		return nicknames.getOrDefault(id, "User" + id);
 	}
-	
+
 	public Map<Integer, String> getNicknamesMap() {
 		return nicknames;
 	}
@@ -335,18 +395,19 @@ public class ClientMsg {
 		c.startSession();
 		System.out.println("Vous êtes : " + c.getIdentifier());
 
-
 		Scanner sc = new Scanner(System.in);
 		String lu = null;
 
 		while (!"\\quit".equals(lu)) {
 			try {
-				System.out.println("Tapez 'message', 'fichier', une commande (/history, /new, /add, /rm, /del, /leave, /nick), ou '\\quit' :");
+				System.out.println(
+						"Tapez 'message', 'fichier', une commande (/history, /new, /add, /rm, /del, /leave, /nick), ou '\\quit' :");
 				lu = sc.nextLine().trim();
 
-				if (lu.isEmpty()) continue;
+				if (lu.isEmpty())
+					continue;
 
-				if (lu.startsWith("/")) { //如果/开始就是一个命令
+				if (lu.startsWith("/")) { // 如果/开始就是一个命令
 					String[] parts = lu.split("\\s+");
 					String cmd = parts[0];
 					switch (cmd) {
@@ -363,14 +424,15 @@ public class ClientMsg {
 							}
 							StringBuilder sb = new StringBuilder();
 							for (int i = 1; i < parts.length; i++) {
-								if (i > 1) sb.append(",");
+								if (i > 1)
+									sb.append(",");
 								sb.append(parts[i]);
 							}
 							String[] ids = sb.toString().split(",");
 							int[] members = new int[ids.length];
 							for (int i = 0; i < ids.length; i++)
 								members[i] = Integer.parseInt(ids[i].trim());
-							c.requestCreateGroup(members);
+							c.requestCreateGroup("Groupe", members);
 							System.out.println("Demande: créer groupe avec membres " + sb + " envoyée");
 							break;
 						}
@@ -431,11 +493,6 @@ public class ClientMsg {
 							}
 							c.requestSetNickname(sb.toString());
 							System.out.println("Demande: changer pseudo en '" + sb + "' envoyée");
-							break;
-						}
-
-						case "/quit": {
-							lu = "\\quit";
 							break;
 						}
 

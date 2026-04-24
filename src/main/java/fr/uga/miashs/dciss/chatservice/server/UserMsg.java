@@ -87,27 +87,46 @@ public class UserMsg implements PacketProcessor, Serializable {
 	/*
 	 * METHODS FOR MANAING THE CONNECTION
 	 */
-	public boolean open(Socket s) {
+	public synchronized boolean open(Socket s) {
 		if (active)
 			return false;
 		this.s = s;
 		active = true;
 		// Les messages en attente dans sendQueue seront automatiquement envoyés par sendLoop()
 		// car elle repart dès que open() est appelé !
+		try{
+			if (server != null && server.getPacketProcessor()!=null) {
+				server.getPacketProcessor().onUserOnline(this);
+			}
+		} catch(Throwable t) {
+			LOG.warning ("Echec notification online "+userId+" : " + t.getMessage());
+		}
 		return true;
 	}
 
 	public void close() {
-		active = false;
-		try {
-			if (s != null)
-				s.close();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+		boolean wasActive;
+		synchronized (this) {
+			wasActive = active;
+			active = false;
+			try {
+				if (s != null)
+					s.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			s = null;
 		}
-		s = null;
-		LOG.info(userId + " deconnected");
+		if (wasActive) {
+			LOG.info(userId + " deconnected");
+			try {
+				if (server != null && server.getPacketProcessor() != null) {
+					server.getPacketProcessor().onUserOffline(this);
+				}
+			} catch (Throwable t) {
+				LOG.warning("Echec notification OFFLINE pour " + userId + " : " + t.getMessage());
+			}
+		}
 	}
 
 	public boolean isConnected() {

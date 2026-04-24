@@ -20,4 +20,13 @@ public final class MessageType {
     //nickname
     public static final byte SET_NICKNAME = 6;
     public static final byte NOTIF_NICKNAME_CHANGED = 6;
+
+    // indicateur de presence (en ligne / hors ligne)
+    public static final byte NOTIF_USER_ONLINE = 7;
+    public static final byte NOTIF_USER_OFFLINE = 8;
+    public static final byte NOTIF_PRESENCE_SNAPSHOT = 9;
+
+    // Client → Serveur : demande explicite d'un snapshot de présence
+    // (réponse du serveur = NOTIF_PRESENCE_SNAPSHOT)
+    public static final byte QUERY_PRESENCE = 10;
 }

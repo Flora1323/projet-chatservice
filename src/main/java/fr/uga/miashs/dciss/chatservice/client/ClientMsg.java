@@ -45,7 +45,7 @@ public class ClientMsg {
 	private List<MessageListener> mListeners;
 	private List<ConnectionListener> cListeners;
 	private final Map<Integer, String> nicknames = new ConcurrentHashMap<>();
-
+	private final Set<Integer> onlineUsers = ConcurrentHashMap.newKeySet();
 	/**
 	 * Create a client with an existing id, that will connect to the server at the
 	 * given address and port
@@ -258,8 +258,30 @@ public class ClientMsg {
 		sendPacket(0,bos.toByteArray());
 	}
 
+	/**
+	 * Demande explicitement au serveur un snapshot de présence (/refresh).
+	 * Le serveur répondra via un NOTIF_PRESENCE_SNAPSHOT que le listener
+	 * existant traitera : onlineUsers est reconstruit et affiché.
+	 */
+	public void requestPresenceSnapshot() throws IOException {
+		ByteArrayOutputStream bos = new ByteArrayOutputStream();
+		DataOutputStream dos = new DataOutputStream(bos);
+		dos.writeByte(QUERY_PRESENCE);
+		dos.flush();
+		sendPacket(0, bos.toByteArray());
+	}
+
 	public String displayName(int id) {
 		return nicknames.getOrDefault(id, "User" + id);
+	}
+
+	/**
+	 * Retourne un symbole de présence ("●" en ligne / "○" hors ligne)
+	 * suivi du nom affichable pour cet id.
+	 */
+	public String presenceFor(int id) {
+		String mark = onlineUsers.contains(id) ? "[●]" : "[○]";
+		return mark + " " + displayName(id);
 	}
 
 
@@ -320,6 +342,39 @@ public class ClientMsg {
 						System.out.println("✓ User " + uid + " s'appelle désormais '" + newName + "'");
 						break;
 					}
+
+					case NOTIF_USER_ONLINE: {
+						int uid = buf.getInt();
+						c.onlineUsers.add(uid);
+						System.out.println("[●] " + c.displayName(uid) + " est en ligne");
+						break;
+					}
+
+					case NOTIF_USER_OFFLINE: {
+						int uid = buf.getInt();
+						c.onlineUsers.remove(uid);
+						System.out.println("[○] " + c.displayName(uid) + " est hors ligne");
+						break;
+					}
+
+					case NOTIF_PRESENCE_SNAPSHOT: {
+						int nb = buf.getInt();
+						c.onlineUsers.clear();//清空旧的数据
+						StringBuilder sb = new StringBuilder();
+						for(int i = 0; i<nb;i++) {
+							int uid = buf.getInt();
+							c.onlineUsers.add(uid);
+							if(i > 0) sb.append(", ");
+							sb.append(c.displayName(uid));
+						}
+						if(nb == 0){
+							System.out.println("Aucun contact en ligne");
+						} else {
+							System.out.println( "En ligne (" + nb + ") : "+ sb);
+						}
+						break;
+					}
+
 					default:
 						System.out.println("Notification inconnue: type=" + type);
 				}
@@ -365,7 +420,7 @@ public class ClientMsg {
 		String lu = null;
 		while(!"\\quit".equals(lu)){
 			try{
-				System.out.println("A qui voulez vous écrire ? (ou /new, /add, /rm, /del, /leave, /nick, /quit)");
+				System.out.println("A qui voulez vous écrire ? (ou /new, /add, /rm, /del, /leave, /nick, /who, /refresh, /quit)");
 				String ligne =sc.nextLine().trim();//sc.nextLine() lis toute la ligne, trim() enlève les spaces
 				if (ligne.isEmpty()) continue;
 				if(ligne.startsWith("/")) { //如果/开始就是一个命令
@@ -388,13 +443,22 @@ public class ClientMsg {
 								if (i > 1) sb.append(",");
 								sb.append(parts[i]);
 							}
-							String [] ids = sb.toString().split(",");
-							int[] members = new int [ids.length];
-							for(int i = 0; i<ids.length;i++) 
-								members [i] = Integer.parseInt(ids[i].trim());
+							String[] ids = sb.toString().split(",");
+							int[] members = new int[ids.length];
+							boolean valid = true;
+							for (int i = 0; i < ids.length; i++) {
+								int m = Integer.parseInt(ids[i].trim());
+								if (m <= 0) {
+									System.out.println("Id invalide: " + m + " (un id utilisateur doit être > 0)");
+									valid = false;
+									break;
+								}
+								members[i] = m;
+							}
+							if (!valid) break;
 							c.requestCreateGroup(members);
-							int gid = Integer.parseInt(parts[1]);
-							System.out.println("Demande: créer groupe " + gid +" avec membres " + sb + " envoyée");
+							System.out.println("Demande: créer un groupe avec membres " + sb
+									+ " envoyée (l'id du groupe sera attribué par le serveur)");
 							break;
 						}
 
@@ -455,6 +519,28 @@ public class ClientMsg {
 							}
 							c.requestSetNickname(sb.toString());
 							System.out.println("Demande: changer pseudo en '" + sb + "' envoyée");
+							break;
+						}
+
+						case "/who": {
+							if (c.onlineUsers.isEmpty()) {
+								System.out.println("(Aucun contact en ligne)");
+							} else {
+								StringBuilder sb = new StringBuilder();
+								boolean first = true;
+								for (int uid : c.onlineUsers) {
+									if (!first) sb.append(", ");
+									sb.append(c.displayName(uid)).append("(").append(uid).append(")");
+									first = false;
+								}
+								System.out.println("En ligne (" + c.onlineUsers.size() + ") : " + sb);
+							}
+							break;
+						}
+
+						case "/refresh": {
+							c.requestPresenceSnapshot();
+							System.out.println("Demande de rafraichissement envoyée");
 							break;
 						}
 

@@ -169,6 +169,10 @@ public class ServerMsg implements Serializable {
 	public GroupMsg getGroup(int id) {
 		return groups.get(id);
 	}
+
+	public ServerPacketProcessor getPacketProcessor() {
+		return sp;
+	}
 	
 	public void save(String filePath) {
 		try (ObjectOutputStream oos = new ObjectOutputStream(

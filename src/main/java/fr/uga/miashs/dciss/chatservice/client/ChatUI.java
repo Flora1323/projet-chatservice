@@ -273,7 +273,7 @@ public class ChatUI extends Application {
                 client.sendPacket(destId, msg.getBytes()); // on envoie le message au serveur pour qu'il le redirige au
                                                            // destinataire
                 // sauvegarde le message envoyé dans la BDD
-                history.saveMessage(client.getIdentifier(), destId, msg);
+                Message.insertMessage(client.getIdentifier(), destId, msg);
                 addMessage(msg, true); // on affiche le message dans la zone de messages (true
                                        // = c'est un message envoyé par moi)
                 inputField.clear();
@@ -292,7 +292,7 @@ public class ChatUI extends Application {
                 int destId = Integer.parseInt(destText);
                 client.sendPacket(destId, msg.getBytes());
                 // sauvegarde le message envoyé dans la BDD
-                history.saveMessage(client.getIdentifier(), destId, msg);
+                Message.insertMessage(client.getIdentifier(), destId, msg);
                 addMessage(msg, true);
                 inputField.clear();
             } catch (NumberFormatException ex) {
@@ -584,6 +584,7 @@ public class ChatUI extends Application {
     // #############################
     
     private void afficherListeContacts() {
+    	contactList.getChildren().clear();
         // On récupère la liste BDD
         List<Contact> contactsBdd = Contact.getAllContacts(); // ou Message.getAllContacts()
         
@@ -736,7 +737,7 @@ public class ChatUI extends Application {
             java.nio.file.Files.write(fichierRecu.toPath(), fileBytes);
 
             
-           // Message.sauvegarderMessage(p.srcId, client.getIdentifier(), "[FICHIER]:" + nomFichier);
+           Message.insertMessage(p.srcId, client.getIdentifier(), "[FICHIER]:" + nomFichier);
         
             // Afficher dans l'interface selon le type
             String sender = client.displayName(p.srcId);

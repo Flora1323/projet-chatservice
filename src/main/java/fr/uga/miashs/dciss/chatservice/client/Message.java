@@ -9,7 +9,7 @@ import java.util.List;
 public class Message {
 
     // Insérer un message dans la base
-    public static void insertMessage(int senderId, int receiverId, String content) throws Exception {
+    public static void insertMessage(int senderId, int receiverId, String content) {
         try {
             Connection conn = DB.connect();
 

@@ -308,6 +308,16 @@ public class ClientMsg {
 		return nicknames;
 	}
 
+	// méthode pour demander au serveur la liste de tous les pseudos (pour
+	// initialiser la map des pseudos au démarrage du client)
+	public void requestAllNicknames() throws IOException {
+		ByteArrayOutputStream bos = new ByteArrayOutputStream();
+		DataOutputStream dos = new DataOutputStream(bos);
+		dos.writeByte(GET_ALL_NICKNAMES);
+		dos.flush();
+		sendPacket(0, bos.toByteArray());
+	}
+
 	public static void main(String[] args) throws UnknownHostException, IOException, InterruptedException {
 
 		// MISE EN PLACE D'UN SERVEUR POUR TESTER LE CLIENT

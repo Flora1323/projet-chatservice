@@ -11,6 +11,8 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
+
+import java.io.IOException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -35,6 +37,9 @@ public class ChatUI extends Application {
     // Une seule Map locale suffit pour faire le lien temporaire
     private Map<Integer, String> customGroupNames = new HashMap<>();
     private String lastCreatedGroupName;
+
+    // Historique des messages
+    private LocalHistoryManager history = new LocalHistoryManager();
 
     @Override
     public void start(Stage stage) {
@@ -199,19 +204,14 @@ public class ChatUI extends Application {
         inputField.setStyle("-fx-background-radius: 20; -fx-padding: 8 15 8 15;"); // arrondit les bords et ajoute du
                                                                                    // padding
         HBox.setHgrow(inputField, Priority.ALWAYS); // prend tout l'espace disponible
-
+        
         // Bouton envoyer
         Button sendButton = new Button("➤");
         sendButton.setStyle(
                 "-fx-background-color: #3E2723; -fx-text-fill: white; "
                         + "-fx-background-radius: 20; -fx-font-size: 16; -fx-padding: 5 15 5 15;"); // bleu azur, texte
-        // blanc, arrondi,
-        // taille de police
-        // 16, padding
 
-        bottomBar.getChildren().addAll(inputField, sendButton); // on ajoute le champ et le bouton à la barre du bas
-        root.setBottom(bottomBar); // on met la barre en bas
-
+                        
         // ####################################
         // Action du bouton envoyer
         // ####################################
@@ -230,6 +230,8 @@ public class ChatUI extends Application {
                 // envoie le message via ClientMsg
                 client.sendPacket(destId, msg.getBytes()); // on envoie le message au serveur pour qu'il le redirige au
                                                            // destinataire
+                // sauvegarde le message envoyé dans la BDD
+                history.saveMessage(client.getIdentifier(), destId, msg);
                 addMessage(msg, true); // on affiche le message dans la zone de messages (true
                                        // = c'est un message envoyé par moi)
                 inputField.clear();
@@ -237,7 +239,8 @@ public class ChatUI extends Application {
                 System.out.println("ID invalide");
             }
         });
-
+      
+        
         // Envoyer aussi avec la touche Entrée
         inputField.setOnAction(e -> {
             String msg = inputField.getText().trim();
@@ -247,6 +250,8 @@ public class ChatUI extends Application {
             try {
                 int destId = Integer.parseInt(destText);
                 client.sendPacket(destId, msg.getBytes());
+                // sauvegarde le message envoyé dans la BDD
+                history.saveMessage(client.getIdentifier(), destId, msg);
                 addMessage(msg, true);
                 inputField.clear();
             } catch (NumberFormatException ex) {
@@ -286,8 +291,9 @@ public class ChatUI extends Application {
 
         // Action : Exclure
         removeMember.setOnAction(e -> {
+            String gName = client.displayName(gid);
             TextInputDialog dialog = new TextInputDialog();
-            dialog.setHeaderText("Exclure un membre du groupe " + gid);
+            dialog.setHeaderText("Exclure un membre du groupe " + gName);
             dialog.showAndWait().ifPresent(uid -> {
                 try {
                     client.requestRemoveMember(gid, Integer.parseInt(uid.trim()));
@@ -331,19 +337,25 @@ public class ChatUI extends Application {
 
             // quand on reçoit un message, on l'affiche à gauche
             client.addMessageListener(p -> {
+            	// Si c'est un fichier (byte 2)
+            	if (p.data != null && p.data.length > 0 && p.data[0] == 2) {
+            	    recevoirFichierUI(p);
+            	    return;
+            	}
                 if (p.srcId == 0 && p.data != null && p.data.length >= 1) {
                     ByteBuffer buf = ByteBuffer.wrap(p.data);
                     byte type = buf.get();
                     switch (type) {
                         case NOTIF_GROUP_CREATED: {
                             int gid = buf.getInt();
-                            // Lire le nom envoyé par le serveur (ASSURE-TOI QUE LE SERVEUR L'ENVOIE BIEN !)
+                            // Lire le nom envoyé par le serveur
                             int nameLen = buf.getInt();
                             byte[] nameBytes = new byte[nameLen];
                             buf.get(nameBytes);
                             String gName = new String(nameBytes, StandardCharsets.UTF_8);
 
-                            // Maintenant que le getter existe, cette ligne va fonctionner !
+                            // on enregistre le nom du groupe dans la map des pseudos pour l'afficher
+                            // correctement
                             client.getNicknamesMap().put(gid, gName);
 
                             Platform.runLater(() -> {
@@ -360,8 +372,11 @@ public class ChatUI extends Application {
                             buf.get(nameBytes);
                             String gName = new String(nameBytes, StandardCharsets.UTF_8);
 
+                            // On récupère le nom de l'utilisateur ajouté
+                            String uName = client.displayName(uid);
+
                             Platform.runLater(() -> {
-                                addMessage("✓ User " + uid + " ajouté au groupe " + gName, false);
+                                addMessage("✓ " + uName + " ajouté au groupe " + gName, false);
                                 if (uid == client.getIdentifier()) {
                                     client.getNicknamesMap().put(gid, gName);
                                     groupList.getChildren().add(createGroupButton(gid));
@@ -372,8 +387,13 @@ public class ChatUI extends Application {
                         case NOTIF_MEMBER_REMOVED: {
                             int gid = buf.getInt();
                             int uid = buf.getInt();
+
+                            // On transforme les IDs en noms
+                            String uName = client.displayName(uid);
+                            String gName = client.displayName(gid);
+
                             Platform.runLater(() -> {
-                                addMessage("✓ User " + uid + " retiré du groupe " + gid, false);
+                                addMessage("✓ " + uName + " retiré du groupe " + gName, false);
                                 // SI C'EST MOI qui suis retiré (ou qui ai quitté), j'enlève le bouton
                                 if (uid == client.getIdentifier()) {
                                     removeGroupButton(gid);
@@ -383,8 +403,11 @@ public class ChatUI extends Application {
                         }
                         case NOTIF_GROUP_DELETED: {
                             int gid = buf.getInt();
+
+                            String gName = client.displayName(gid); // On récupère le nom du groupe
+
                             Platform.runLater(() -> {
-                                addMessage("✓ Groupe " + gid + " supprimé", false);
+                                addMessage("✓ Le groupe " + gName + " a été supprimé", false);
                                 removeGroupButton(gid); // On enlève le bouton car le groupe n'existe plus
                             });
                             break;
@@ -396,14 +419,33 @@ public class ChatUI extends Application {
                             buf.get(nameBytes);
                             String newName = new String(nameBytes, StandardCharsets.UTF_8); // on suppose que le pseudo
                                                                                             // est encodé en UTF-8
+                                                                                            // Met à jour la map des
+                                                                                            // nicknames !
+                            client.getNicknamesMap().put(uid, newName);
                             Platform.runLater(() -> addMessage("✨ " + uid + " s'appelle maintenant " + newName, false)); // on
                                                                                                                          // affiche
                                                                                                                          // la
                                                                                                                          // notification
                                                                                                                          // de
                                                                                                                          // changement
-                                                                                                                         // de
+                                                                                                                        // de
                                                                                                                          // pseudo
+                            break;
+                        }
+                        case NOTIF_ALL_NICKNAMES: {
+                            int nb = buf.getInt();
+                            for (int i = 0; i < nb; i++) {
+                                int uid = buf.getInt();
+                                int len = buf.getInt();
+                                byte[] nameBytes = new byte[len];
+                                buf.get(nameBytes);
+                                String name = new String(nameBytes, StandardCharsets.UTF_8);
+                                client.getNicknamesMap().put(uid, name);
+                            }
+                            Platform.runLater(() -> {
+                                String monNom = client.displayName(client.getIdentifier());
+                                statusLabel.setText("Connecté en tant que : " + monNom + " (ID : " + client.getIdentifier() + ")");
+                            });
                             break;
                         }
                         case NOTIF_ERROR: {
@@ -417,11 +459,14 @@ public class ChatUI extends Application {
                         }
                     }
                 } else {
+                    // --- RECEPTION DE MESSAGE NORMAL ---
                     String msg = new String(p.data);
                     String sender = client.displayName(p.srcId); // Utilise le pseudo
 
                     if (p.destId < 0) { // Si c'est un message de groupe
                         String groupName = client.displayName(p.destId);
+                        // sauvegarde le message reçu
+                        // history.saveMessage(p.srcId, p.destId, msg); // SAUVEGARDE DANS LA BDD
                         Platform.runLater(() -> addMessage("[" + groupName + "] " + sender + " : " + msg, false));
                     } else {
                         Platform.runLater(() -> addMessage(sender + " : " + msg, false));
@@ -433,10 +478,12 @@ public class ChatUI extends Application {
             client.addConnectionListener(active -> {
                 Platform.runLater(() -> {
                     if (active) {
-                        statusLabel.setText("ID : " + client.getIdentifier());
-                        chargerHistorique(client.getIdentifier()); // Charge l'historique des messages depuis la BDD à la connexion
+                    	int monId = client.getIdentifier();
+                        statusLabel.setText("Connecté (ID: " + monId + ")");
+                        chargerHistorique(monId); // Charge l'historique des messages depuis la BDD à la connexion
                         Contact.insererContactsDeTest(); // Insère des contacts de test dans la BDD (à faire une seule fois)
                         afficherListeContacts(); // Affiche la liste des contacts à la connexion
+
                     } else {
                         statusLabel.setText("Déconnecté");
                     }
@@ -444,6 +491,13 @@ public class ChatUI extends Application {
             });
 
             client.startSession();
+
+            // Demande tous les nicknames au serveur
+            try {
+                client.requestAllNicknames();
+            } catch (IOException e) {
+                System.out.println("Erreur requête nicknames : " + e.getMessage());
+            }
 
         } catch (UnknownHostException e) {
             System.out.println("Erreur connexion serveur");
@@ -594,6 +648,128 @@ public class ChatUI extends Application {
 
         // On retire de la VBox groupList tout composant qui correspond à cet ID
         groupList.getChildren().removeIf(node -> targetId.equals(node.getId()));
+    } 
+    
+    private void recevoirFichierUI(fr.uga.miashs.dciss.chatservice.common.Packet p) {
+        try {
+            java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(p.data);
+            java.io.DataInputStream dis = new java.io.DataInputStream(bis);
+            
+            byte type = dis.readByte();                       // lis le type
+            int tailleNom = dis.readInt();                    // lis la taille du nom
+            
+            byte[] nameBytes = new byte[tailleNom];
+            dis.readFully(nameBytes);
+            String nomFichier = new String(nameBytes);
+            
+            int tailleFichier = dis.readInt();
+            byte[] fileBytes = new byte[tailleFichier];
+            dis.readFully(fileBytes);
+            
+            // Sauvegarder le fichier
+            java.io.File dossier = new java.io.File("fichiers_recus");
+            if (!dossier.exists()) dossier.mkdirs();
+            java.io.File fichierRecu = new java.io.File(dossier, nomFichier);
+            java.nio.file.Files.write(fichierRecu.toPath(), fileBytes);
+            
+            // Afficher dans l'interface selon le type
+            String sender = client.displayName(p.srcId);
+            Platform.runLater(() -> afficherFichier(fichierRecu, nomFichier, sender));
+            
+        } catch (java.io.IOException e) {
+            e.printStackTrace();
+        }
+    }
+    private void afficherFichier(java.io.File fichier, String nomFichier, String sender) {
+        HBox container = new HBox();
+        container.setAlignment(Pos.CENTER_LEFT);
+        
+        VBox bubble = new VBox(5);
+        bubble.setPadding(new Insets(8, 12, 8, 12));
+        bubble.setStyle("-fx-background-color: white; -fx-background-radius: 15 15 15 0;");
+        bubble.setMaxWidth(320);
+        
+        // Nom de l'expéditeur
+        Label senderLabel = new Label(sender);
+        senderLabel.setFont(Font.font("Arial", FontWeight.BOLD, 11));
+        senderLabel.setTextFill(Color.web("#3E2723"));
+        bubble.getChildren().add(senderLabel);
+        
+        // Détection du type
+        String ext = nomFichier.toLowerCase();
+        if (ext.endsWith(".png") || ext.endsWith(".jpg") || ext.endsWith(".jpeg") || ext.endsWith(".gif")) {
+            // C'est une image ou un GIF - afficher directement
+            try {
+                javafx.scene.image.Image image = new javafx.scene.image.Image(fichier.toURI().toString());
+                javafx.scene.image.ImageView imageView = new javafx.scene.image.ImageView(image);
+                imageView.setFitWidth(300);
+                imageView.setPreserveRatio(true);
+                bubble.getChildren().add(imageView);
+            } catch (Exception e) {
+                bubble.getChildren().add(new Label("📎 " + nomFichier));
+            }
+        } else {
+            // Autre type de fichier - afficher comme lien
+            Label fileLabel = new Label("📎 " + nomFichier);
+            fileLabel.setStyle("-fx-text-fill: #3E2723; -fx-underline: true; -fx-cursor: hand;");
+            fileLabel.setOnMouseClicked(e -> {
+                try {
+                    java.awt.Desktop.getDesktop().open(fichier);
+                } catch (Exception ex) {
+                    System.out.println("Impossible d'ouvrir le fichier");
+                }
+            });
+            bubble.getChildren().add(fileLabel);
+        }
+        
+        container.getChildren().add(bubble);
+        messagesBox.getChildren().add(container);
+        
+        scrollPane.layout();
+        scrollPane.setVvalue(1.0);
+    }
+    
+    private void afficherFichierEnvoye(java.io.File fichier, String nomFichier) {
+        HBox container = new HBox();
+        container.setAlignment(Pos.CENTER_RIGHT); // Aligné à DROITE car c'est moi qui envoie
+        
+        VBox bubble = new VBox(5);
+        bubble.setPadding(new Insets(8, 12, 8, 12));
+        bubble.setStyle("-fx-background-color: #F4C9D6; -fx-background-radius: 15 15 0 15;"); // Rose comme mes messages
+        bubble.setMaxWidth(320);
+        
+        // Détection du type
+        String ext = nomFichier.toLowerCase();
+        if (ext.endsWith(".png") || ext.endsWith(".jpg") || ext.endsWith(".jpeg") || ext.endsWith(".gif")) {
+            // C'est une image ou un GIF - afficher directement
+            try {
+                javafx.scene.image.Image image = new javafx.scene.image.Image(fichier.toURI().toString());
+                javafx.scene.image.ImageView imageView = new javafx.scene.image.ImageView(image);
+                imageView.setFitWidth(300);
+                imageView.setPreserveRatio(true);
+                bubble.getChildren().add(imageView);
+            } catch (Exception e) {
+                bubble.getChildren().add(new Label("📎 " + nomFichier));
+            }
+        } else {
+            // Autre type de fichier - afficher comme lien
+            Label fileLabel = new Label("📎 " + nomFichier);
+            fileLabel.setStyle("-fx-text-fill: #3E2723; -fx-underline: true; -fx-cursor: hand;");
+            fileLabel.setOnMouseClicked(e -> {
+                try {
+                    java.awt.Desktop.getDesktop().open(fichier);
+                } catch (Exception ex) {
+                    System.out.println("Impossible d'ouvrir le fichier");
+                }
+            });
+            bubble.getChildren().add(fileLabel);
+        }
+        
+        container.getChildren().add(bubble);
+        messagesBox.getChildren().add(container);
+        
+        scrollPane.layout();
+        scrollPane.setVvalue(1.0);
     }
 
     public static void main(String[] args) {

@@ -19,6 +19,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
+import javafx.stage.FileChooser;
+import java.io.File;
+
 import static fr.uga.miashs.dciss.chatservice.common.MessageType.*;
 
 public class ChatUI extends Application {
@@ -177,6 +180,40 @@ public class ChatUI extends Application {
 
         root.setCenter(scrollPane); // on met la zone messages au centre
 
+        // --- BOUTON FICHIER ---
+        Button fileButton = new Button("📎");
+        fileButton.setStyle(
+                "-fx-background-color: #3E2723; -fx-text-fill: white; " +
+                "-fx-background-radius: 20; -fx-font-size: 16; -fx-padding: 5 12 5 12;");
+
+        fileButton.setOnAction(e -> {
+            String destText = destField.getText().trim();
+            if (destText.isEmpty()) {
+                addMessage("⚠️ Choisis un destinataire avant d'envoyer un fichier !", false);
+                return;
+            }
+
+            // Ouvre la fenêtre de sélection de fichier
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("Choisir un fichier à envoyer 💅");
+            File selectedFile = fileChooser.showOpenDialog(stage);
+
+            if (selectedFile != null) {
+                try {
+                    int destId = Integer.parseInt(destText);
+                    // On appelle la méthode que tu as déjà dans ClientMsg
+                    client.envoyerFichier(destId, selectedFile); 
+                    
+                    addMessage("📁 Fichier envoyé : " + selectedFile.getName(), true);
+                } catch (NumberFormatException ex) {
+                    addMessage("✗ ID destinataire invalide", false);
+                } catch (Exception ex) {
+                    addMessage("✗ Erreur lors de l'envoi du fichier", false);
+                    ex.printStackTrace();
+                }
+            }
+        });
+
         // ####################################
         // LE BAS DE LA FENETRE
         // ####################################
@@ -199,7 +236,7 @@ public class ChatUI extends Application {
                 "-fx-background-color: #3E2723; -fx-text-fill: white; "
                         + "-fx-background-radius: 20; -fx-font-size: 16; -fx-padding: 5 15 5 15;"); // bleu azur, texte
 
-                        
+
         // ####################################
         // Action du bouton envoyer
         // ####################################

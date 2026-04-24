@@ -434,11 +434,6 @@ public class ClientMsg {
 							break;
 						}
 
-						case "/quit": {
-							lu = "\\quit";
-							break;
-						}
-
 						default:
 							System.out.println("Commande inconnue");
 					}

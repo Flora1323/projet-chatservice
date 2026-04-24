@@ -26,13 +26,13 @@ public class LocalHistoryManager {
     	    System.out.println("--- Historique des messages ---");
     	    try {
     	        // On va chercher les messages dans la BDD pour cet utilisateur
-    	        List<String> archives = Message.getMessages(monId);
+    	        List<Archive> archives = Message.getMessages(monId);
     	        
     	        if (archives.isEmpty()) {
 		            System.out.println("Aucun message trouvé dans l'historique.");
 		        } else {
-		            for (String s : archives) {
-		                System.out.println("[HISTORIQUE] " + s);
+		            for (Archive arc : archives) {
+		                System.out.println(arc.senderId + " : " + arc.content);
 		            }
 		        }
     	    } catch (Exception e) {

@@ -44,12 +44,12 @@ public class Message {
 
             while (rs.next()) {
                 // On crée la ligne de texte
-                String ligne = rs.getInt("sender_id") + " -> " +
-                               rs.getInt("receiver_id") + " : " +
-                               rs.getString("content");
+            	// On récupère les deux infos séparément
+                int expediteur = rs.getInt("sender_id");
+                String texte = rs.getString("content");
                 
                 // Au lieu de l'afficher, on l'ajoute à la liste
-                resultats.add(ligne);
+                resultats.add(new Archive(expediteur, texte));
             }
 
             rs.close();   

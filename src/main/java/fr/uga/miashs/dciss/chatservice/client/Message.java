@@ -2,13 +2,14 @@ package fr.uga.miashs.dciss.chatservice.client;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
 public class Message {
 
     // Insérer un message dans la base
-    public static void insertMessage(int senderId, int receiverId, String content) throws Exception {
+    public static void insertMessage(int senderId, int receiverId, String content) {
         try {
             Connection conn = DB.connect();
 
@@ -29,8 +30,8 @@ public class Message {
     // Lire les messages pour un utilisateur ou groupe
  //MÉTHODE MODIFIÉE : On renvoie maintenant une List<String>
     // pour que celui qui appelle la méthode puisse faire ce qu'il veut avec (afficher, sauvegarder dans un fichier, etc.)
-    public static List<String> getMessages(int userId) throws Exception {
-        List<String> resultats = new ArrayList<>();
+    public static List<Archive> getMessages(int userId) throws Exception {
+        List<Archive> resultats = new ArrayList<>();
         try {
             Connection conn = DB.connect();
 
@@ -44,12 +45,12 @@ public class Message {
 
             while (rs.next()) {
                 // On crée la ligne de texte
-                String ligne = rs.getInt("sender_id") + " -> " +
-                               rs.getInt("receiver_id") + " : " +
-                               rs.getString("content");
+            	// On récupère les deux infos séparément
+                int expediteur = rs.getInt("sender_id");
+                String texte = rs.getString("content");
                 
                 // Au lieu de l'afficher, on l'ajoute à la liste
-                resultats.add(ligne);
+                resultats.add(new Archive(expediteur, texte));
             }
 
             rs.close();   
@@ -60,6 +61,45 @@ public class Message {
         }
         return resultats; // On renvoie la liste à celui qui a appelé la méthode
     }
+
+    public static List<Archive> getMessagesSpecifiques(int monId, int destId) {
+        List<Archive> messages = new ArrayList<>();
+        String query;
+        
+        // Si destId < 0, c'est un groupe. Sinon, c'est du privé.
+        if (destId < 0) {
+            query = "SELECT sender_id, content FROM messages WHERE receiver_id = ? ORDER BY timestamp ASC";
+        } else {
+            query = "SELECT sender_id, content FROM messages " +
+                    "WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?) " +
+                    "ORDER BY timestamp ASC";
+        }
+
+        try (Connection conn = DB.connect();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            
+            if (destId < 0) {
+                pstmt.setInt(1, destId);
+            } else {
+                pstmt.setInt(1, monId);
+                pstmt.setInt(2, destId);
+                pstmt.setInt(3, destId);
+                pstmt.setInt(4, monId);
+            }
+            
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+            	int expediteur = rs.getInt("sender_id");
+            	String texte = rs.getString("content");
+
+            	messages.add(new Archive(expediteur, texte));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return messages;
+    }
+    
 
     // Sauvegarder un fichier (juste le chemin)
     public static void saveFile(int messageId, String path) throws Exception {
@@ -113,6 +153,22 @@ public class Message {
     }
 
 
+    public static void main(String[] args) {
+        try {
+            System.out.println("--- TEST DE LA BDD ---");
+            // 1. On essaie d'insérer un message de test
+            insertMessage(1, 2, "Test de communication BDD");
+            System.out.println("✅ Insertion réussie !");
+
+            // 2. On essaie de le relire
+            List<Archive> tests = getMessagesSpecifiques(1, 2);
+            System.out.println("✅ Lecture réussie, nombre de messages : " + tests.size());
+            
+        } catch (Exception e) {
+            System.out.println("❌ Erreur lors du test : " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
 
 
 }

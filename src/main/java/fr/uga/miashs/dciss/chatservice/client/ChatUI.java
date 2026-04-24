@@ -18,6 +18,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
+
 
 import javafx.stage.FileChooser;
 import java.io.File;
@@ -33,6 +35,7 @@ public class ChatUI extends Application {
     private TextField destField;
     private Label statusLabel;
     private VBox groupList;
+    private VBox contactList;
 
     // Une seule Map locale suffit pour faire le lien temporaire
     private Map<Integer, String> customGroupNames = new HashMap<>();
@@ -96,6 +99,15 @@ public class ChatUI extends Application {
         Label groupTitle = new Label("Groupes");
         groupTitle.setFont(Font.font("Arial", FontWeight.BOLD, 14));
         groupTitle.setTextFill(Color.WHITE);
+        
+        Label contactTitle = new Label("Mes Contacts");
+        contactTitle.setFont(Font.font("Arial", FontWeight.BOLD, 14));
+        contactTitle.setTextFill(Color.WHITE);
+        
+        contactList = new VBox(5);
+        
+        // Ajoute-les au leftPanel (avant ou après les groupes, comme tu préfères !)
+        leftPanel.getChildren().addAll(contactTitle, contactList);
 
         // BOUTON POUR CREER UN GROUPE
         Button createGroupBtn = new Button("+ Créer groupe");
@@ -261,7 +273,7 @@ public class ChatUI extends Application {
                 client.sendPacket(destId, msg.getBytes()); // on envoie le message au serveur pour qu'il le redirige au
                                                            // destinataire
                 // sauvegarde le message envoyé dans la BDD
-                history.saveMessage(client.getIdentifier(), destId, msg);
+                Message.insertMessage(client.getIdentifier(), destId, msg);
                 addMessage(msg, true); // on affiche le message dans la zone de messages (true
                                        // = c'est un message envoyé par moi)
                 inputField.clear();
@@ -280,7 +292,7 @@ public class ChatUI extends Application {
                 int destId = Integer.parseInt(destText);
                 client.sendPacket(destId, msg.getBytes());
                 // sauvegarde le message envoyé dans la BDD
-                history.saveMessage(client.getIdentifier(), destId, msg);
+                Message.insertMessage(client.getIdentifier(), destId, msg);
                 addMessage(msg, true);
                 inputField.clear();
             } catch (NumberFormatException ex) {
@@ -454,15 +466,14 @@ public class ChatUI extends Application {
                                                                                             // Met à jour la map des
                                                                                             // nicknames !
                             client.getNicknamesMap().put(uid, newName);
-                            Platform.runLater(() -> addMessage("✨ " + uid + " s'appelle maintenant " + newName, false)); // on
-                                                                                                                         // affiche
-                                                                                                                         // la
-                                                                                                                         // notification
-                                                                                                                         // de
-                                                                                                                         // changement
-                                                                                                                         // de
-                                                                                                                         // pseudo
-                            break;
+                            Contact.sauvegarderContact(uid, newName); // On sauvegarde le nouveau pseudo dans la BDD pour le retrouver plus tard
+                            Platform.runLater(() -> {
+                            	
+                            addMessage("✨ " + uid + " s'appelle maintenant " + newName, false); // on affiche la notification de changement de pseudo
+                            contactList.getChildren().clear();
+                            afficherListeContacts();
+                            });                                                                                           
+
                         }
                         case NOTIF_ALL_NICKNAMES: {
                             int nb = buf.getInt();
@@ -476,8 +487,12 @@ public class ChatUI extends Application {
                             }
                             Platform.runLater(() -> {
                                 String monNom = client.displayName(client.getIdentifier());
-                                statusLabel.setText(
-                                        "Connecté en tant que : " + monNom + " (ID : " + client.getIdentifier() + ")");
+
+                                statusLabel.setText("Connecté en tant que : " + monNom + " (ID : " + client.getIdentifier() + ")");
+                                
+                                contactList.getChildren().clear();
+                                afficherListeContacts();
+
                             });
                             break;
                         }
@@ -502,6 +517,8 @@ public class ChatUI extends Application {
                         // history.saveMessage(p.srcId, p.destId, msg); // SAUVEGARDE DANS LA BDD
                         Platform.runLater(() -> addMessage("[" + groupName + "] " + sender + " : " + msg, false));
                     } else {
+                    	// sauvegarde le message reçu
+                    	Message.insertMessage(p.srcId, client.getIdentifier(), msg);
                         Platform.runLater(() -> addMessage(sender + " : " + msg, false));
                     }
                 }
@@ -511,7 +528,12 @@ public class ChatUI extends Application {
             client.addConnectionListener(active -> {
                 Platform.runLater(() -> {
                     if (active) {
-                        statusLabel.setText("Connecté (ID: " + client.getIdentifier() + ")");
+                    	int monId = client.getIdentifier();
+                        statusLabel.setText("Connecté (ID: " + monId + ")");
+                        chargerHistorique(monId); // Charge l'historique des messages depuis la BDD à la connexion
+                        //Contact.insererContactsDeTest(); // Insère des contacts de test dans la BDD (à faire une seule fois)
+                        afficherListeContacts(); // Affiche la liste des contacts à la connexion
+
                     } else {
                         statusLabel.setText("Déconnecté");
                     }
@@ -562,6 +584,127 @@ public class ChatUI extends Application {
         scrollPane.layout();
         scrollPane.setVvalue(1.0);
     }
+    // #############################
+    // Affichage de la liste de contacts
+    // #############################
+    
+    private void afficherListeContacts() {
+    	contactList.getChildren().clear();
+        // On récupère la liste BDD
+        List<Contact> contactsBdd = Contact.getAllContacts(); // ou Message.getAllContacts()
+        
+        System.out.println("Nombre de contacts trouvés dans la BDD : " + contactsBdd.size());
+        // On tourne sur chaque contact
+        for (Contact c : contactsBdd) {
+            // On ne crée pas de bouton pour discuter avec soi-même !
+            if (c.getId() == client.getIdentifier()) continue; 
+            
+            // On crée un joli bouton
+            Button btnContact = new Button(c.getNickname());
+            btnContact.setStyle("-fx-background-color: transparent; -fx-text-fill: #FFDEE2; -fx-font-weight: bold;");
+            
+            // L'ACTION DU CLIC
+            btnContact.setOnAction(e -> {
+                changerDeConversation(c.getId());
+            });
+            
+            // On ajoute le bouton à la barre de gauche
+            contactList.getChildren().add(btnContact);
+        }
+    }
+    
+    // #############################
+    // Affichage de l'historique
+    // #############################
+    private void addHistoryMessage(String text, boolean isMine) {
+        HBox container = new HBox(); 
+        Label bubble = new Label(text); 
+        bubble.setWrapText(true); 
+        bubble.setMaxWidth(320); 
+        bubble.setPadding(new Insets(8, 12, 8, 12)); 
+        bubble.setFont(Font.font("Arial", 13)); 
+
+        if (isMine) {
+            // Gris pour tes anciens messages (à droite)
+            bubble.setStyle("-fx-background-color: #D3D3D3; -fx-background-radius: 15 15 0 15;");
+            container.setAlignment(Pos.CENTER_RIGHT); 
+        } else {
+            // Gris plus clair pour les anciens messages des autres (à gauche)
+            bubble.setStyle("-fx-background-color: #EBEBEB; -fx-background-radius: 15 15 15 0;");
+            container.setAlignment(Pos.CENTER_LEFT); 
+        }
+
+        container.getChildren().add(bubble); 
+        messagesBox.getChildren().add(container); 
+        scrollPane.layout();
+        scrollPane.setVvalue(1.0);
+    } 
+    
+    private void chargerHistorique(int monId) {
+        try {
+            // 1. On récupère les objets bruts
+            List<Archive> archives = Message.getMessages(monId); // (Ou getMessagesSpecifiques)
+            
+            for (Archive arc : archives) {
+                // 2. Est-ce que c'est MOI l'expéditeur ?
+                boolean isMine = (arc.senderId == monId);
+                
+                // 3. On cherche le pseudo grâce au travail de ton amie !
+                String pseudo;
+                if (isMine) {
+                    pseudo = "Moi";
+                } else {
+                    // Cherche le pseudo dans la map, s'il n'existe pas, affiche "ID X"
+                    pseudo = client.getNicknamesMap().getOrDefault(arc.senderId, "ID " + arc.senderId);
+                }
+                
+                // 4. On dessine la bulle grise !
+                addHistoryMessage("🕰️ " + pseudo + " : " + arc.content, isMine); 
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur lors du chargement de l'historique : " + e.getMessage());
+        }
+    }
+    
+    // ####################################
+    // FONCTION POUR CHANGER DE DISCUSSION
+    // ####################################
+    private void changerDeConversation(int destId) {
+        // On remplit automatiquement le champ "À :" en haut
+        destField.setText(String.valueOf(destId));
+        messagesBox.getChildren().clear();
+        try {
+            int monId = client.getIdentifier(); 
+
+            List<Archive> archives = Message.getMessagesSpecifiques(monId, destId);
+            
+            for (Archive arc : archives) {
+                boolean isMine = (arc.senderId == monId);
+                String pseudo = isMine ? "Moi" : client.getNicknamesMap().getOrDefault(arc.senderId, "ID " + arc.senderId);
+                
+                if (arc.content.startsWith("[FICHIER]:")) {
+                    // On découpe le mot "[FICHIER]:" pour ne garder que "image.png"
+                    String nomFichier = arc.content.substring(10); 
+                    
+                    // On va chercher le fichier dans le dossier
+                    java.io.File fichierLocal = new java.io.File("fichiers_recus", nomFichier);
+                    
+                    if (fichierLocal.exists()) {
+                        // Le fichier est là, on l'affiche !
+                        afficherFichierHistorique(fichierLocal, nomFichier, pseudo, isMine);
+                    } else {
+                        // Le fichier a été supprimé de l'ordinateur, on affiche un texte d'erreur
+                        addHistoryMessage("🕰️ " + pseudo + " : ❌ [Fichier manquant] " + nomFichier, isMine);
+                    }
+                    
+                } else { 
+                addHistoryMessage("🕰️ " + pseudo + " : " + arc.content, isMine); 
+            }
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur de changement de conversation : " + e.getMessage());
+        }
+    }
 
     // #############################
     // Parcourt la liste des boutons de groupes et supprime celui qui correspond à
@@ -598,6 +741,9 @@ public class ChatUI extends Application {
             java.io.File fichierRecu = new java.io.File(dossier, nomFichier);
             java.nio.file.Files.write(fichierRecu.toPath(), fileBytes);
 
+            
+           Message.insertMessage(p.srcId, client.getIdentifier(), "[FICHIER]:" + nomFichier);
+        
             // Afficher dans l'interface selon le type
             String sender = client.displayName(p.srcId);
             Platform.runLater(() -> afficherFichier(fichierRecu, nomFichier, sender));
@@ -699,6 +845,56 @@ public class ChatUI extends Application {
         scrollPane.setVvalue(1.0);
     }
 
+ // ####################################
+    // AFFICHER UN FICHIER DE L'HISTORIQUE EN GRIS
+    // ####################################
+    private void afficherFichierHistorique(java.io.File fichier, String nomFichier, String sender, boolean isMine) {
+        HBox container = new HBox();
+        VBox bubble = new VBox(5);
+        bubble.setPadding(new Insets(8, 12, 8, 12));
+        bubble.setMaxWidth(320);
+        
+        if (isMine) {
+            container.setAlignment(Pos.CENTER_RIGHT);
+            bubble.setStyle("-fx-background-color: #D3D3D3; -fx-background-radius: 15 15 0 15;");
+        } else {
+            container.setAlignment(Pos.CENTER_LEFT);
+            bubble.setStyle("-fx-background-color: #EBEBEB; -fx-background-radius: 15 15 15 0;");
+            
+            Label senderLabel = new Label("🕰️ " + sender);
+            senderLabel.setFont(Font.font("Arial", FontWeight.BOLD, 11));
+            senderLabel.setTextFill(Color.web("#3E2723"));
+            bubble.getChildren().add(senderLabel);
+        }
+        
+        // Détection du type
+        String ext = nomFichier.toLowerCase();
+        if (ext.endsWith(".png") || ext.endsWith(".jpg") || ext.endsWith(".jpeg") || ext.endsWith(".gif")) {
+            try {
+                javafx.scene.image.Image image = new javafx.scene.image.Image(fichier.toURI().toString());
+                javafx.scene.image.ImageView imageView = new javafx.scene.image.ImageView(image);
+                imageView.setFitWidth(200); // Un peu plus petit pour l'historique
+                imageView.setPreserveRatio(true);
+                bubble.getChildren().add(imageView);
+            } catch (Exception e) {
+                bubble.getChildren().add(new Label("📎 " + nomFichier));
+            }
+        } else {
+            Label fileLabel = new Label("📎 " + nomFichier);
+            fileLabel.setStyle("-fx-text-fill: #3E2723; -fx-underline: true; -fx-cursor: hand;");
+            fileLabel.setOnMouseClicked(e -> {
+                try { java.awt.Desktop.getDesktop().open(fichier); } 
+                catch (Exception ex) { System.out.println("Impossible d'ouvrir"); }
+            });
+            bubble.getChildren().add(fileLabel);
+        }
+        
+        container.getChildren().add(bubble);
+        messagesBox.getChildren().add(container);
+        scrollPane.layout();
+        scrollPane.setVvalue(1.0);
+    }
+    
     public static void main(String[] args) {
         launch(args);
     }

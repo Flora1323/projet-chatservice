@@ -319,6 +319,11 @@ public class ChatUI extends Application {
 
             // quand on reçoit un message, on l'affiche à gauche
             client.addMessageListener(p -> {
+            	// Si c'est un fichier (byte 2)
+            	if (p.data != null && p.data.length > 0 && p.data[0] == 2) {
+            	    recevoirFichierUI(p);
+            	    return;
+            	}
                 if (p.srcId == 0 && p.data != null && p.data.length >= 1) {
                     ByteBuffer buf = ByteBuffer.wrap(p.data);
                     byte type = buf.get();
@@ -476,6 +481,37 @@ public class ChatUI extends Application {
 
         // On retire de la VBox groupList tout composant qui correspond à cet ID
         groupList.getChildren().removeIf(node -> targetId.equals(node.getId()));
+    } 
+    
+    private void recevoirFichierUI(fr.uga.miashs.dciss.chatservice.common.Packet p) {
+        try {
+            java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(p.data);
+            java.io.DataInputStream dis = new java.io.DataInputStream(bis);
+            
+            byte type = dis.readByte();                       // lis le type
+            int tailleNom = dis.readInt();                    // lis la taille du nom
+            
+            byte[] nameBytes = new byte[tailleNom];
+            dis.readFully(nameBytes);
+            String nomFichier = new String(nameBytes);
+            
+            int tailleFichier = dis.readInt();
+            byte[] fileBytes = new byte[tailleFichier];
+            dis.readFully(fileBytes);
+            
+            // Sauvegarder le fichier
+            java.io.File dossier = new java.io.File("fichiers_recus");
+            if (!dossier.exists()) dossier.mkdirs();
+            java.io.File fichierRecu = new java.io.File(dossier, nomFichier);
+            java.nio.file.Files.write(fichierRecu.toPath(), fileBytes);
+            
+            // Afficher dans l'interface selon le type
+            String sender = client.displayName(p.srcId);
+            Platform.runLater(() -> afficherFichier(fichierRecu, nomFichier, sender));
+            
+        } catch (java.io.IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public static void main(String[] args) {

@@ -513,6 +513,54 @@ public class ChatUI extends Application {
             e.printStackTrace();
         }
     }
+    private void afficherFichier(java.io.File fichier, String nomFichier, String sender) {
+        HBox container = new HBox();
+        container.setAlignment(Pos.CENTER_LEFT);
+        
+        VBox bubble = new VBox(5);
+        bubble.setPadding(new Insets(8, 12, 8, 12));
+        bubble.setStyle("-fx-background-color: white; -fx-background-radius: 15 15 15 0;");
+        bubble.setMaxWidth(320);
+        
+        // Nom de l'expéditeur
+        Label senderLabel = new Label(sender);
+        senderLabel.setFont(Font.font("Arial", FontWeight.BOLD, 11));
+        senderLabel.setTextFill(Color.web("#3E2723"));
+        bubble.getChildren().add(senderLabel);
+        
+        // Détection du type
+        String ext = nomFichier.toLowerCase();
+        if (ext.endsWith(".png") || ext.endsWith(".jpg") || ext.endsWith(".jpeg") || ext.endsWith(".gif")) {
+            // C'est une image ou un GIF - afficher directement
+            try {
+                javafx.scene.image.Image image = new javafx.scene.image.Image(fichier.toURI().toString());
+                javafx.scene.image.ImageView imageView = new javafx.scene.image.ImageView(image);
+                imageView.setFitWidth(300);
+                imageView.setPreserveRatio(true);
+                bubble.getChildren().add(imageView);
+            } catch (Exception e) {
+                bubble.getChildren().add(new Label("📎 " + nomFichier));
+            }
+        } else {
+            // Autre type de fichier - afficher comme lien
+            Label fileLabel = new Label("📎 " + nomFichier);
+            fileLabel.setStyle("-fx-text-fill: #3E2723; -fx-underline: true; -fx-cursor: hand;");
+            fileLabel.setOnMouseClicked(e -> {
+                try {
+                    java.awt.Desktop.getDesktop().open(fichier);
+                } catch (Exception ex) {
+                    System.out.println("Impossible d'ouvrir le fichier");
+                }
+            });
+            bubble.getChildren().add(fileLabel);
+        }
+        
+        container.getChildren().add(bubble);
+        messagesBox.getChildren().add(container);
+        
+        scrollPane.layout();
+        scrollPane.setVvalue(1.0);
+    }
 
     public static void main(String[] args) {
         launch(args);

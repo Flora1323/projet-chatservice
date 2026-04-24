@@ -244,7 +244,8 @@ public class ChatUI extends Application {
     }
 
     private Button createGroupButton(int gid) {
-        Button groupBtn = new Button("Groupe " + gid);
+        String name = client.getNicknamesMap().getOrDefault(gid, "Groupe " + gid);
+        Button groupBtn = new Button(name);
         groupBtn.setId("btn-group-" + gid); // On donne un ID pour le retrouver facilement plus tard
         groupBtn.setStyle("-fx-background-color: #F4C9D6; -fx-text-fill: #3E2723; -fx-background-radius: 10;");
         groupBtn.setMaxWidth(Double.MAX_VALUE);
@@ -342,11 +343,15 @@ public class ChatUI extends Application {
                         case NOTIF_MEMBER_ADDED: {
                             int gid = buf.getInt();
                             int uid = buf.getInt();
-                            System.out.println("NOTIF_MEMBER_ADDED reçu : gid=" + gid + " uid=" + uid + " monId="
-                                    + client.getIdentifier());
+                            int nameLen = buf.getInt();
+                            byte[] nameBytes = new byte[nameLen];
+                            buf.get(nameBytes);
+                            String gName = new String(nameBytes, StandardCharsets.UTF_8);
+
                             Platform.runLater(() -> {
-                                addMessage("✓ User " + uid + " ajouté au groupe " + gid, false);
+                                addMessage("✓ User " + uid + " ajouté au groupe " + gName, false);
                                 if (uid == client.getIdentifier()) {
+                                    client.getNicknamesMap().put(gid, gName);
                                     groupList.getChildren().add(createGroupButton(gid));
                                 }
                             });

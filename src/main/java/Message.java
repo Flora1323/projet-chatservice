@@ -67,4 +67,49 @@ public class Message {
             e.printStackTrace(); 
         }
     }
+
+
+    public static void getConversation(int user1, int user2) {
+        try {
+            Connection conn = DB.connect();
+
+            String sql = "SELECT * FROM messages WHERE " +
+                    "(sender_id = ? AND receiver_id = ?) OR " +
+                    "(sender_id = ? AND receiver_id = ?) " +
+                    "ORDER BY timestamp";
+
+            PreparedStatement ps = conn.prepareStatement(sql);
+            ps.setInt(1, user1);
+            ps.setInt(2, user2);
+            ps.setInt(3, user2);
+            ps.setInt(4, user1);
+
+            ResultSet rs = ps.executeQuery();
+
+            while (rs.next()) {
+                System.out.println(
+                    rs.getInt("sender_id") + " -> " +
+                    rs.getInt("receiver_id") + " : " +
+                    rs.getString("content")
+                );
+            }
+
+            rs.close();
+            ps.close();
+            conn.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+
+
+
 }
+
+
+
+
+
+
+

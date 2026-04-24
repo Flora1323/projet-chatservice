@@ -25,3 +25,4 @@ derby.log
 sample/
 server-state.ser
 client-*.db/
+client.db
